@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>406 Truck Drops | Cheap 4x4 Trucks Around Billings, MT</title>
+  <meta name="description" content="Cheap 4x4 trucks around Billings, Montana, the second they hit Facebook Marketplace. Get instant alerts and never miss a deal." />
+  <link rel="canonical" href="https://406truckdrops.com/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="406 Truck Drops" />
+  <meta property="og:title" content="406 Truck Drops | Cheap 4x4 Trucks Around Billings, MT" />
+  <meta property="og:description" content="Cheap 4x4 trucks around Billings, Montana, the second they hit Facebook Marketplace." />
+  <meta property="og:url" content="https://406truckdrops.com/" />
+  <meta property="og:image" content="https://406truckdrops.com/og-cover.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="406 Truck Drops logo and tagline" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="406 Truck Drops | Cheap 4x4 Trucks Around Billings, MT" />
+  <meta name="twitter:description" content="Cheap 4x4 trucks around Billings, Montana, the second they hit Facebook Marketplace." />
+  <meta name="twitter:image" content="https://406truckdrops.com/og-cover.jpg" />
+
+  <meta name="theme-color" content="#0A0A0A" />
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="msapplication-navbutton-color" content="#0A0A0A" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="color-scheme" content="dark" />
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/styles.css" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "406 Truck Drops",
+    "url": "https://406truckdrops.com/",
+    "logo": "https://406truckdrops.com/images/406-truck-drops-icon.png",
+    "description": "Cheap 4x4 truck deal alerts around Billings, Montana.",
+    "sameAs": [
+      "https://www.instagram.com/406truckdrops/",
+      "https://www.facebook.com/profile.php?id=61594674244776",
+      "https://www.youtube.com/@406truckdrops"
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#feed">Skip to the deals</a>
+
+  <header class="hero">
+    <img class="hero-mark" src="/images/406-truck-drops-icon.png" alt="406 Truck Drops logo" width="160" height="160" />
+    <h1 class="wordmark">406 Truck <span class="accent">Drops</span></h1>
+    <p class="pitch">Cheap 4x4 trucks around Billings, the second they hit Marketplace.</p>
+    <button class="btn" id="alerts-btn" type="button">Get alerts</button>
+    <p class="btn-note" id="alerts-note" aria-live="polite"></p>
+  </header>
+
+  <main>
+    <section class="feed-section" id="feed" aria-label="Latest drops">
+      <div class="feed-head">
+        <h2>Latest drops</h2>
+        <p class="feed-sub" id="feed-status">Checking for new trucks…</p>
+      </div>
+      <div class="feed" id="feed-list"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <nav class="socials" aria-label="Social links">
+      <a href="https://www.instagram.com/406truckdrops/" target="_blank" rel="noopener">Instagram</a>
+      <a href="https://www.facebook.com/profile.php?id=61594674244776" target="_blank" rel="noopener">Facebook</a>
+      <a href="https://www.youtube.com/@406truckdrops" target="_blank" rel="noopener">YouTube</a>
+    </nav>
+    <p class="fine">406 Truck Drops · Billings, Montana</p>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
