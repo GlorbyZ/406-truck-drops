@@ -149,6 +149,138 @@ function initNav() {
   });
 }
 
+const NAV_HINT_KEY = 'cr_nav_hint';
+
+function readNavHint() {
+  try {
+    const raw = localStorage.getItem(NAV_HINT_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data.email !== 'string' || !data.email) return null;
+    return { email: data.email, admin: !!data.admin, instant: !!data.instant };
+  } catch {
+    return null;
+  }
+}
+
+function writeNavHint(me) {
+  try {
+    localStorage.setItem(
+      NAV_HINT_KEY,
+      JSON.stringify({ email: me.email, admin: !!me.admin, instant: !!me.instant })
+    );
+  } catch {
+    /* Storage can be blocked. The next /api/me response still paints the nav. */
+  }
+}
+
+function clearNavHint() {
+  try {
+    localStorage.removeItem(NAV_HINT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function signOut(event) {
+  if (event && event.preventDefault) event.preventDefault();
+  clearNavHint();
+  try {
+    const res = await fetch('/api/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error('logout failed');
+    location.href = '/';
+  } catch {
+    location.href = '/api/logout';
+  }
+}
+
+function renderSignedOut(node) {
+  const trial = document.querySelector('[data-nav-trial]');
+  if (trial) trial.hidden = false;
+  if (!node || node.tagName === 'A') return node;
+  const link = document.createElement('a');
+  link.href = '/account';
+  link.setAttribute('data-nav-auth', '');
+  link.textContent = 'Sign in';
+  if (location.pathname === '/account') link.setAttribute('aria-current', 'page');
+  node.replaceWith(link);
+  return link;
+}
+
+function renderSignedIn(node, me) {
+  if (!node || !me || typeof me.email !== 'string' || !me.email) return node;
+  const cluster = document.createElement('span');
+  cluster.className = 'nav-auth';
+  cluster.setAttribute('data-nav-auth', '');
+
+  const account = document.createElement('a');
+  account.className = 'nav-account';
+  account.href = '/account';
+  account.title = me.email;
+  account.textContent = me.email;
+  if (location.pathname === '/account') account.setAttribute('aria-current', 'page');
+  cluster.appendChild(account);
+
+  if (me.admin) {
+    const badge = document.createElement('span');
+    badge.className = 'nav-admin';
+    badge.textContent = 'Admin';
+    cluster.appendChild(badge);
+  }
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'nav-signout';
+  button.textContent = 'Sign out';
+  button.addEventListener('click', signOut);
+  cluster.appendChild(button);
+
+  node.replaceWith(cluster);
+  const trial = document.querySelector('[data-nav-trial]');
+  if (trial) trial.hidden = !!(me.instant || me.admin);
+  return cluster;
+}
+
+function initNavAuth() {
+  const slot = document.querySelector('[data-nav-auth]');
+  if (!slot) return;
+  const hint = readNavHint();
+  if (hint) renderSignedIn(slot, hint);
+  refreshNavAuth();
+  const logout = document.getElementById('logout-btn');
+  if (logout && !logout.dataset.bound) {
+    logout.dataset.bound = '1';
+    logout.addEventListener('click', signOut);
+  }
+}
+
+async function refreshNavAuth() {
+  try {
+    const res = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
+    const slot = document.querySelector('[data-nav-auth]');
+    if (res.status === 401) {
+      clearNavHint();
+      renderSignedOut(slot);
+      return;
+    }
+    if (!res.ok) return;
+    const me = await res.json();
+    if (!me || typeof me.email !== 'string' || !me.email) {
+      clearNavHint();
+      renderSignedOut(slot);
+      return;
+    }
+    writeNavHint(me);
+    renderSignedIn(slot, me);
+  } catch {
+    /* Network error keeps Sign in, or the stored hint, on screen. */
+  }
+}
+
 function initFeed() {
   const list = document.getElementById('feed-list');
   if (!list) return;
@@ -355,7 +487,7 @@ async function initAccount() {
 
   let me = null;
   try {
-    const res = await fetch('/api/me');
+    const res = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
     if (res.ok) me = await res.json();
   } catch {
     me = null;
@@ -388,11 +520,9 @@ async function initAccount() {
   }
 
   const logout = document.getElementById('logout-btn');
-  if (logout) {
-    logout.addEventListener('click', async () => {
-      await fetch('/api/logout', { method: 'POST' });
-      location.href = '/account';
-    });
+  if (logout && !logout.dataset.bound) {
+    logout.dataset.bound = '1';
+    logout.addEventListener('click', signOut);
   }
 }
 
@@ -410,6 +540,7 @@ async function initSmsPlan() {
 }
 
 initNav();
+initNavAuth();
 initFeed();
 initSubscribe();
 initCheckout();

@@ -290,6 +290,69 @@ summary:focus-visible {
   color: var(--asphalt);
 }
 
+.nav-auth {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nav-account {
+  text-decoration: none;
+  color: var(--bone);
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: inline-block;
+  max-width: 220px;
+  min-height: var(--touch);
+  line-height: var(--touch);
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.nav-account:hover,
+.nav-account[aria-current="page"] {
+  color: var(--orange);
+}
+
+.nav-admin {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 22px;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--orange);
+  color: var(--asphalt);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nav-signout {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.95rem;
+  min-height: var(--touch);
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bone);
+  cursor: pointer;
+}
+
+.nav-signout:hover {
+  color: var(--orange);
+}
+
 .btn-ghost {
   background: transparent;
   border: 1px solid var(--orange);
@@ -945,6 +1008,41 @@ summary:focus-visible {
 
   .btn-nav {
     margin: 0.4rem 0.75rem 0.2rem;
+    min-height: 44px;
+  }
+
+  .nav-auth {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.15rem;
+  }
+
+  .nav-account,
+  .nav-signout {
+    min-height: 44px;
+  }
+
+  .nav-account {
+    display: block;
+    max-width: 160px;
+    line-height: 44px;
+  }
+
+  .nav-signout {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .nav-admin {
+    align-self: flex-start;
+    margin: 0.15rem 0.75rem;
+  }
+
+  .nav-signout {
+    text-align: left;
   }
 
   .alerts-form {

@@ -846,12 +846,29 @@ async function authGet({ request, env }) {
   });
 }
 
-async function logoutPost({ request, env }) {
+async function endSession(request, env) {
   const session = await readSession(request, env);
   if (session) {
     await env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(session.id).run();
   }
-  return json({ ok: true }, 200, { 'Set-Cookie': clearSessionCookie(request) });
+  return clearSessionCookie(request);
+}
+
+async function logoutPost({ request, env }) {
+  const cookie = await endSession(request, env);
+  return json({ ok: true }, 200, { 'Set-Cookie': cookie });
+}
+
+async function logoutGet({ request, env }) {
+  const cookie = await endSession(request, env);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: '/',
+      'Set-Cookie': cookie,
+      'cache-control': 'no-store',
+    },
+  });
 }
 
 async function meGet({ request, env }) {
@@ -1611,7 +1628,7 @@ function notFoundPage() {
     '<header class="site-header"><a class="brand" href="/"><span class="brand-text">406 Cheap <span>Rides</span></span></a>' +
     '<nav class="site-nav" aria-label="Primary"><a href="/#deals">Deals</a>' +
     '<a href="/categories">Categories</a><a href="/pricing">Pricing</a>' +
-    '<a href="/account">Sign in</a><a class="btn btn-nav" href="/pricing">Start free trial</a></nav></header>' +
+    '<a href="/account" data-nav-auth>Sign in</a><a class="btn btn-nav" data-nav-trial href="/pricing">Start free trial</a></nav></header>' +
     '<main class="page"><p class="eyebrow">404</p><h1>Page not found</h1>' +
     '<p class="lede">That page is not on 406 Cheap Rides.</p>' +
     '<p><a class="btn" href="/">Back home</a></p></main></body></html>';
@@ -1729,6 +1746,7 @@ export default {
       if (path === '/api/login' && request.method === 'POST') return await loginPost({ request, env });
       if (path === '/api/auth' && request.method === 'GET') return await authGet({ request, env });
       if (path === '/api/logout' && request.method === 'POST') return await logoutPost({ request, env });
+      if (path === '/api/logout' && request.method === 'GET') return await logoutGet({ request, env });
       if (path === '/api/me' && request.method === 'GET') return await meGet({ request, env });
       if (path === '/api/subscribe' && request.method === 'POST') return await subscribePost({ request, env });
       if (path === '/api/confirm' && request.method === 'GET') return await confirmGet({ request, env });

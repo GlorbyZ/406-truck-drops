@@ -136,8 +136,9 @@ Every outbound message goes through `sendEmail` in `public/_worker.js` (login li
 | `GET` | `/api/portal` | Session cookie | 303 redirect to a Stripe Billing Portal session. |
 | `POST` | `/api/login` | Public | Emails a one-time sign-in link (30 minutes). |
 | `GET` | `/api/auth?token=` | Link | Sets an HttpOnly `cr_session` cookie and redirects to `/account`. |
-| `POST` | `/api/logout` | Session | Clears the session. |
-| `GET` | `/api/me` | Session | Plan, status, trial end, paid until. Admins also get `admin: true` and `instant: true`. |
+| `POST` | `/api/logout` | Public | Deletes the session row when the cookie is valid and returns `200 {"ok":true}` with a clearing `Set-Cookie`. `cache-control: no-store`. |
+| `GET` | `/api/logout` | Public | Same clear, then `302` to `/`. |
+| `GET` | `/api/me` | Session | Plan, status, trial end, paid until. Admins also get `admin: true` and `instant: true`. `401` when signed out. `cache-control: no-store`. |
 | `POST` | `/api/subscribe` | Public | Free double opt-in. Confirm link plus unsubscribe link. |
 | `GET` | `/api/confirm?token=` | Link | Marks the email confirmed. |
 | `GET` | `/api/unsubscribe?token=` | Link | Opts the address out of alert email. Does not cancel Stripe. Alert mail uses `?email=&sig=` (HMAC of the address) instead of a stored token. |
@@ -166,6 +167,7 @@ No npm install. The suite stubs `fetch` for Stripe and Resend and uses the built
 - Email allowlist guard, including login, subscribe, and instant alert fan-out (dedupe on `alert_sends`)
 - `new` alerts only when the listing is inserted, and `price_drop` alerts only when the price is lower than the stored price
 - Admin accounts (`ADMIN_EMAILS`) and JPEG upload to the `PHOTOS` binding
+- Logout cookie clearing, and the signed-in navbar slot on every page
 - SMS checkout gate and checkout error logging
 - HTML 404 for unknown pages
 
