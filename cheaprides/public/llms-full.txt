@@ -4,6 +4,8 @@
 
 406 Cheap Rides is an alert service, not a dealer. It watches public third-party marketplace listings for cheap cars near Billings, Montana, scores each one in a plain sentence (year, price, and about how far under the usual asking price), and emails subscribers.
 
+The service is operated by 406TruckDrops. Questions go to support@406truckdrops.com.
+
 ## What a subscriber gets
 
 Paid plans are $7 per month or $49 per year. Both start with a 7-day free trial. The card is collected up front. When the trial ends, the plan auto-bills that card unless the subscriber canceled before then.

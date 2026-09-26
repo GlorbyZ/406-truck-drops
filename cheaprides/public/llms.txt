@@ -4,6 +4,8 @@
 
 406 Cheap Rides watches public car listings and emails you when a cheap deal shows up near Billings. Paid members get that email when a listing is new or the price drops. The free feed is the same deals, delayed 24 hours.
 
+The service is operated by 406TruckDrops. Questions go to support@406truckdrops.com.
+
 ## Plans
 
 - Monthly: $7 per month after a 7-day free trial

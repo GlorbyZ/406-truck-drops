@@ -107,10 +107,18 @@ test('robots, sitemap, and llms files are served with the right types', async ()
   assert.match(brief, /\$49 per year/);
   assert.match(brief, /Billings/);
   assert.match(brief, /Beater commuters/);
+  assert.match(brief, /406TruckDrops/);
+  assert.doesNotMatch(brief, /placeholder/i);
+  assert.doesNotMatch(brief, /\[OPERATOR LEGAL NAME\]/);
 
   const full = await worker.fetch(new Request('https://cheaprides.406truckdrops.com/llms-full.txt'), env);
   assert.equal(full.status, 200);
-  assert.match(await full.text(), /24 hours/);
+  const fullBody = await full.text();
+  assert.match(fullBody, /24 hours/);
+  assert.match(fullBody, /406TruckDrops/);
+  assert.match(fullBody, /support@406truckdrops\.com/);
+  assert.doesNotMatch(fullBody, /placeholder/i);
+  assert.doesNotMatch(fullBody, /\[OPERATOR LEGAL NAME\]/);
 
   const missing = await worker.fetch(new Request('https://cheaprides.406truckdrops.com/no-such-page'), env);
   assert.equal(missing.status, 404);
