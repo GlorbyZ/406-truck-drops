@@ -178,7 +178,7 @@ test('user-facing cheaprides files do not use em dashes', () => {
   const bad = [];
   for (const file of files) {
     if (file.includes('/test/')) continue;
-    if (!/\.(html|js|css|md|sql|toml|svg|example)$/.test(file)) continue;
+    if (!/\.(html|js|css|md|sql|toml|svg|txt|xml|webmanifest|example)$/.test(file)) continue;
     const text = readFileSync(file, 'utf8');
     if (text.includes(emDash) || text.includes(emEntity)) bad.push(file);
   }

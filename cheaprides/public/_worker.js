@@ -1514,15 +1514,51 @@ function notFoundPage() {
     '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>Page not found | 406 Cheap Rides</title>' +
+    '<meta name="robots" content="noindex">' +
+    '<meta name="theme-color" content="#0A0A0A">' +
     '<link rel="stylesheet" href="/styles.css"></head><body>' +
-    '<header class="wrap top"><a class="brand" href="/">406 <span>Cheap Rides</span></a></header>' +
-    '<main class="wrap page"><p class="eyebrow">404</p><h1>Page not found</h1>' +
+    '<header class="site-header"><a class="brand" href="/"><span class="brand-text">406 Cheap <span>Rides</span></span></a>' +
+    '<nav class="site-nav" aria-label="Primary"><a href="/#deals">Deals</a>' +
+    '<a href="/categories">Categories</a><a href="/pricing">Pricing</a>' +
+    '<a href="/account">Sign in</a><a class="btn btn-nav" href="/pricing">Start free trial</a></nav></header>' +
+    '<main class="page"><p class="eyebrow">404</p><h1>Page not found</h1>' +
     '<p class="lede">That page is not on 406 Cheap Rides.</p>' +
     '<p><a class="btn" href="/">Back home</a></p></main></body></html>';
   return new Response(body, {
     status: 404,
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   });
+}
+
+/* Static files (robots, sitemap, llms, icons, pages) are not API routes.
+   If the asset response has no useful content type, set one from the path. */
+function typedAsset(response, path) {
+  if (!response) return response;
+  const current = (response.headers.get('content-type') || '').toLowerCase();
+  if (current && current.indexOf('octet-stream') === -1) return response;
+  const types = [
+    ['.webmanifest', 'application/manifest+json'],
+    ['.svg', 'image/svg+xml'],
+    ['.png', 'image/png'],
+    ['.ico', 'image/x-icon'],
+    ['.xml', 'application/xml; charset=utf-8'],
+    ['.txt', 'text/plain; charset=utf-8'],
+    ['.css', 'text/css; charset=utf-8'],
+    ['.js', 'text/javascript; charset=utf-8'],
+    ['.html', 'text/html; charset=utf-8'],
+  ];
+  const lower = String(path || '').toLowerCase();
+  let type = '';
+  for (let i = 0; i < types.length; i++) {
+    if (lower.endsWith(types[i][0])) {
+      type = types[i][1];
+      break;
+    }
+  }
+  if (!type) return response;
+  const headers = new Headers(response.headers);
+  headers.set('content-type', type);
+  return new Response(response.body, { status: response.status, headers });
 }
 
 export default {
@@ -1547,7 +1583,7 @@ export default {
       if (path.startsWith('/api/')) return notFound();
       if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
         const asset = await env.ASSETS.fetch(request);
-        if (asset && asset.status !== 404) return asset;
+        if (asset && asset.status !== 404) return typedAsset(asset, path);
       }
       return notFoundPage();
     } catch (err) {

@@ -143,7 +143,7 @@ Every outbound message goes through `sendEmail` in `public/_worker.js` (login li
 | `POST` | `/api/ingest` | `Bearer` `INGEST_TOKEN` | Scanner upsert. See `INGEST.md`. A successful `new` or `price_drop` also fans out instant email to active paid subscribers via `ctx.waitUntil`. |
 | `GET` | `/api/listings` | Optional session | Public feed. `feed=latest` (default) or `feed=price_drops`. Anonymous and free sessions are delayed 24 hours. Active paid sessions (`monthly`, `yearly`, `sms` with `paid_until` in the future) are instant. |
 
-Pages: `/`, `/pricing`, `/account`, `/checkout/success`, `/checkout/cancel`, `/terms`, `/privacy`. Terms and privacy are plain-English drafts. The note `Draft, pending review` is an HTML comment only. Unknown non-API paths return an HTML 404. The SMS card on `/pricing` stays hidden until `SMS_ENABLED` is `true`.
+Pages: `/`, `/pricing`, `/categories`, `/account`, `/checkout/success`, `/checkout/cancel`, `/terms`, `/privacy`. Terms and privacy are plain-English drafts. The note `Draft, pending review` is an HTML comment only. Unknown non-API paths return an HTML 404. The SMS card on `/pricing` stays hidden until `SMS_ENABLED` is `true`. `robots.txt`, `sitemap.xml`, `llms.txt`, and `llms-full.txt` are static files in `public/` and are not API routes. Canonical tags use `https://cheaprides.406truckdrops.com`.
 
 ## Tests
 

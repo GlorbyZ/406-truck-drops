@@ -71,26 +71,29 @@ async function postJson(url, body) {
 
 function renderListing(listing) {
   const article = document.createElement('article');
-  article.className = 'deal';
   const photo = safeUrl(listing.hero_photo_url);
+  article.className = 'card' + (photo ? '' : ' no-photo');
   if (photo) {
     const img = document.createElement('img');
+    img.className = 'card-photo';
     img.src = photo;
     img.alt = listing.title || 'Listing photo';
+    img.loading = 'lazy';
     article.appendChild(img);
   }
   const body = document.createElement('div');
-  body.className = 'deal-body';
+  body.className = 'card-body';
   const top = document.createElement('div');
-  top.className = 'deal-top';
+  top.className = 'card-top';
   const h3 = document.createElement('h3');
+  h3.className = 'card-title';
   h3.textContent = listing.title || 'Untitled';
-  const price = document.createElement('div');
-  price.className = 'price';
+  const price = document.createElement('p');
+  price.className = 'card-price';
   price.textContent = money(listing.price);
   top.append(h3, price);
   const meta = document.createElement('p');
-  meta.className = 'meta';
+  meta.className = 'card-meta';
   const place = [listing.city, listing.state].filter(Boolean).join(', ');
   const miles =
     listing.mileage === null || listing.mileage === undefined
@@ -98,7 +101,7 @@ function renderListing(listing) {
       : Number(listing.mileage).toLocaleString('en-US') + ' mi';
   meta.textContent = [place, miles].filter(Boolean).join(' · ');
   const score = document.createElement('p');
-  score.className = 'score';
+  score.className = 'card-take';
   score.textContent = listing.deal_score_text || '';
   body.append(top, meta, score);
   if (listing.previous_price && listing.drop_flag) {
@@ -117,17 +120,28 @@ function renderListing(listing) {
   body.appendChild(tags);
   const href = safeUrl(listing.url);
   if (href) {
-    const link = document.createElement('p');
     const a = document.createElement('a');
+    a.className = 'card-link';
     a.href = href;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     a.textContent = 'View listing';
-    link.appendChild(a);
-    body.appendChild(link);
+    body.appendChild(a);
   }
   article.appendChild(body);
   return article;
+}
+
+function initNav() {
+  document.documentElement.classList.add('js');
+  const button = document.querySelector('.nav-toggle');
+  const nav = document.getElementById('site-nav');
+  if (!button || !nav) return;
+  button.addEventListener('click', () => {
+    const open = button.getAttribute('aria-expanded') !== 'true';
+    button.setAttribute('aria-expanded', String(open));
+    nav.classList.toggle('is-open', open);
+  });
 }
 
 function initFeed() {
@@ -136,23 +150,52 @@ function initFeed() {
   const note = document.getElementById('feed-note');
   const latestBtn = document.getElementById('feed-latest');
   const dropsBtn = document.getElementById('feed-drops');
+  const chips = document.querySelectorAll('#cat-chips .chip');
   let feed = 'latest';
+  let category = new URLSearchParams(location.search).get('cat') || 'all';
+  let lastRows = [];
+
+  function markChips() {
+    let known = false;
+    chips.forEach((chip) => {
+      const on = chip.getAttribute('data-cat') === category;
+      if (on) known = true;
+      chip.classList.toggle('is-on', on);
+    });
+    if (!known) category = 'all';
+    chips.forEach((chip) => {
+      chip.classList.toggle('is-on', chip.getAttribute('data-cat') === category);
+    });
+  }
+
+  function showMessage(text) {
+    list.replaceChildren();
+    const node = document.createElement('div');
+    node.className = 'feed-empty';
+    node.textContent = text;
+    list.appendChild(node);
+  }
+
+  function paint() {
+    const rows = lastRows.filter((listing) => {
+      if (category === 'all') return true;
+      return (listing.categories || []).indexOf(category) !== -1;
+    });
+    list.replaceChildren();
+    if (!rows.length) {
+      showMessage(lastRows.length ? 'Nothing matches that category.' : 'No deals in this feed yet.');
+      return;
+    }
+    for (const listing of rows) list.appendChild(renderListing(listing));
+  }
 
   async function load() {
-    list.replaceChildren();
-    const empty = document.createElement('p');
-    empty.className = 'muted';
-    empty.textContent = 'Loading deals...';
-    list.appendChild(empty);
+    showMessage('Loading deals...');
     try {
       const res = await fetch('/api/listings?feed=' + encodeURIComponent(feed) + '&limit=20');
       const data = await res.json();
-      list.replaceChildren();
       if (!res.ok) {
-        const err = document.createElement('p');
-        err.className = 'muted';
-        err.textContent = 'Could not load deals.';
-        list.appendChild(err);
+        showMessage('Could not load deals.');
         return;
       }
       if (note) {
@@ -160,30 +203,34 @@ function initFeed() {
           ? 'Showing deals at least 24 hours old. Paid members see new deals instantly.'
           : 'You are seeing new deals as soon as they land.';
       }
-      const rows = data.listings || [];
-      if (!rows.length) {
-        const none = document.createElement('p');
-        none.className = 'muted';
-        none.textContent = 'No deals in this feed yet.';
-        list.appendChild(none);
-        return;
-      }
-      for (const listing of rows) list.appendChild(renderListing(listing));
+      lastRows = data.listings || [];
+      paint();
     } catch {
-      list.replaceChildren();
-      const err = document.createElement('p');
-      err.className = 'muted';
-      err.textContent = 'Could not load deals.';
-      list.appendChild(err);
+      showMessage('Could not load deals.');
     }
   }
 
   function select(next) {
     feed = next;
-    if (latestBtn) latestBtn.setAttribute('aria-pressed', String(next === 'latest'));
-    if (dropsBtn) dropsBtn.setAttribute('aria-pressed', String(next === 'price_drops'));
+    if (latestBtn) {
+      latestBtn.setAttribute('aria-pressed', String(next === 'latest'));
+      latestBtn.classList.toggle('is-on', next === 'latest');
+    }
+    if (dropsBtn) {
+      dropsBtn.setAttribute('aria-pressed', String(next === 'price_drops'));
+      dropsBtn.classList.toggle('is-on', next === 'price_drops');
+    }
     load();
   }
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      category = chip.getAttribute('data-cat') || 'all';
+      markChips();
+      paint();
+    });
+  });
+  markChips();
 
   if (latestBtn) latestBtn.addEventListener('click', () => select('latest'));
   if (dropsBtn) dropsBtn.addEventListener('click', () => select('price_drops'));
@@ -332,6 +379,7 @@ async function initSmsPlan() {
   }
 }
 
+initNav();
 initFeed();
 initSubscribe();
 initCheckout();

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0A0A0A"/>
+  <radialGradient id="glow" cx="85%" cy="0%" r="55%">
+    <stop offset="0%" stop-color="#FF6A1A" stop-opacity="0.22"/>
+    <stop offset="70%" stop-color="#FF6A1A" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <g transform="translate(96 210) scale(3.2)">
+    <rect width="64" height="64" rx="14" fill="#121212"/>
+    
+  <text x="32" y="27" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" font-size="15" fill="#FF6A1A" letter-spacing="0.5">406</text>
+  <path fill="#FF6A1A" d="M14 40h28l6-8h6c2.2 0 4 1.8 4 4v6H14v-2z"/>
+  <path fill="#E7E5E4" d="M22 32h10l4 6H20z"/>
+  <circle cx="22" cy="46" r="3.4" fill="#0A0A0A"/>
+  <circle cx="46" cy="46" r="3.4" fill="#0A0A0A"/>
+  <circle cx="22" cy="46" r="1.5" fill="#FF6A1A"/>
+  <circle cx="46" cy="46" r="1.5" fill="#FF6A1A"/>
+
+  </g>
+  <text x="340" y="250" font-family="Inter, sans-serif" font-weight="700" font-size="72" fill="#E7E5E4">406 CHEAP</text>
+  <text x="340" y="330" font-family="Inter, sans-serif" font-weight="700" font-size="72" fill="#FF6A1A">RIDES</text>
+  <text x="340" y="400" font-family="Inter, sans-serif" font-weight="500" font-size="32" fill="#E7E5E4">Cheap cars around Billings, scored in plain English.</text>
+  <text x="340" y="460" font-family="Inter, sans-serif" font-weight="500" font-size="26" fill="#57534E">$7 a month or $49 a year. 7-day free trial.</text>
+</svg>

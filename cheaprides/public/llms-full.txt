@@ -1,0 +1,51 @@
+# 406 Cheap Rides
+
+> Cheap car deal alerts around Billings, Montana. Paid email is instant. The free feed waits 24 hours.
+
+406 Cheap Rides is an alert service, not a dealer. It watches public third-party marketplace listings for cheap cars near Billings, Montana, scores each one in a plain sentence (year, price, and about how far under the usual asking price), and emails subscribers.
+
+The operator legal name and contact address are still placeholders: [OPERATOR LEGAL NAME] and [CONTACT EMAIL].
+
+## What a subscriber gets
+
+Paid plans are $7 per month or $49 per year. Both start with a 7-day free trial. The card is collected up front. When the trial ends, the plan auto-bills that card unless the subscriber canceled before then.
+
+Cancel from the account page. That opens the Stripe billing portal. Access continues until the current period ends, including a trial that is still running. After that, the account drops to the free tier. Partial periods are not refunded unless the law requires a refund.
+
+The free tier is a 24-hour delayed digest of the same deals. Confirm the email from the homepage form to join it.
+
+Text alerts are not available. The SMS plan stays hidden until it is turned on.
+
+## Categories
+
+Deals are tagged as one or more of:
+
+- Beater commuters
+- Winter beaters
+- First cars
+- Mechanic's specials
+- Fun and cheap
+
+Paid alerts respect those preferences. An empty category list means all deals.
+
+## Coverage
+
+The service covers Billings, Montana and roughly a 150-mile radius, including towns such as Laurel, Lockwood, Columbus, and Red Lodge.
+
+## Where listings come from
+
+Listings come from public third-party marketplaces. 406 Cheap Rides does not guarantee accuracy or availability. The car may already be gone. 406 Cheap Rides is not a party to any vehicle sale. The buyer deals with the seller.
+
+## Data
+
+The service stores an email address, an optional phone number, a Stripe customer id, and category preferences. Payments are handled by Stripe. Email is handled by Resend. The service does not sell that data. Every alert email has an unsubscribe link. Unsubscribing stops alert email and does not cancel a paid plan.
+
+## Pages
+
+- Home and deal feed: https://cheaprides.406truckdrops.com/
+- Pricing and trial questions: https://cheaprides.406truckdrops.com/pricing
+- Categories: https://cheaprides.406truckdrops.com/categories
+- Terms: https://cheaprides.406truckdrops.com/terms
+- Privacy: https://cheaprides.406truckdrops.com/privacy
+
+Account pages and the API are not meant for crawlers.
