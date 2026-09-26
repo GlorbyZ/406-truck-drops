@@ -38,7 +38,7 @@ test('public pages share the nav, canonical host, and social tags', () => {
     assert.match(html, /Start free trial/, file);
     assert.match(html, /href="\/terms"/, file);
     assert.match(html, /href="\/privacy"/, file);
-    assert.match(html, /mailto:\[CONTACT EMAIL\]/, file);
+    assert.match(html, /mailto:support@406truckdrops\.com/, file);
     assert.match(html, new RegExp('rel="canonical" href="' + CANONICAL.replace(/\./g, '\\.')), file);
     assert.match(html, /property="og:title"/, file);
     assert.match(html, /property="og:description"/, file);

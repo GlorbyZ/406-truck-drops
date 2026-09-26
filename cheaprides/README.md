@@ -182,4 +182,4 @@ No npm install. The suite stubs `fetch` for Stripe and Resend and uses the built
 
 ## Left for a later step
 
-SMS texts are not sent. `sms_phone` is in the schema but not collected, and the SMS plan stays hidden until `SMS_ENABLED` is exactly `true`. Category preferences are stored as JSON and are not edited in the UI yet. Terms and privacy still need review: replace `[OPERATOR LEGAL NAME]` and `[CONTACT EMAIL]` before treating them as final.
+SMS texts are not sent. `sms_phone` is in the schema but not collected, and the SMS plan stays hidden until `SMS_ENABLED` is exactly `true`. Category preferences are stored as JSON and are not edited in the UI yet. Terms and privacy still need review: replace `[OPERATOR LEGAL NAME]` before treating them as final. Contact mail is support@406truckdrops.com.

@@ -252,7 +252,7 @@ test('terms and privacy drafts stay off the visible page and pricing drops comin
   const pricing = readFileSync(new URL('../public/pricing/index.html', import.meta.url), 'utf8');
   for (const html of [terms, privacy]) {
     assert.match(html, /\[OPERATOR LEGAL NAME\]/);
-    assert.match(html, /\[CONTACT EMAIL\]/);
+    assert.match(html, /support@406truckdrops\.com/);
     assert.match(html, /<!-- Draft, pending review -->/);
     const visible = html.replace(/<!--[\s\S]*?-->/g, '');
     assert.equal(visible.includes('Draft, pending review'), false);
