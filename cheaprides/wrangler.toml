@@ -1,0 +1,20 @@
+# 406CheapRides Cloudflare Pages project.
+# Deploy by direct upload of ./public (see README). Do not attach Truck Drops D1 databases.
+
+name = "406-cheap-rides"
+pages_build_output_dir = "./public"
+compatibility_date = "2026-01-15"
+
+# Plain vars. Secrets are NOT stored here. Put those with `wrangler pages secret put`.
+# ALLOW_REAL_SENDS must stay "false" until you mean to email people outside EMAIL_ALLOWLIST.
+[vars]
+APP_URL = "https://cheaprides.406truckdrops.com"
+EMAIL_FROM = "406CheapRides <alerts@406truckdrops.com>"
+EMAIL_ALLOWLIST = ""
+ALLOW_REAL_SENDS = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cheaprides-db"
+# PLACEHOLDER: replace with the id printed by `wrangler d1 create cheaprides-db`.
+database_id = "REPLACE_WITH_CHEAPRIDES_D1_DATABASE_ID"

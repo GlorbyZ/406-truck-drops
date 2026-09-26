@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>406 Cheap Rides | Cheap car deal alerts</title>
+  <meta name="description" content="Cheap car deals scored in plain English. Paid members see them instantly. Free members see them a day later." />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a class="skip" href="#deals">Skip to deals</a>
+  <header class="wrap top">
+    <a class="brand" href="/">406 <span>Cheap Rides</span></a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/#deals">Deals</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/account">Account</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="wrap hero">
+      <p class="eyebrow">Montana cheap-car alerts</p>
+      <h1>Deals with a number on them.</h1>
+      <p class="lede">406 Cheap Rides watches cheap cars and scores each one in plain English. Paid members hear first. Free members see the same cars a day later.</p>
+      <div class="row">
+        <a class="btn" href="/pricing">Start a 7-day trial</a>
+        <a class="btn secondary" href="#free">Get the free feed</a>
+      </div>
+    </section>
+
+    <section class="wrap section" aria-labelledby="cats-title">
+      <h2 id="cats-title">Five kinds of cheap</h2>
+      <p class="lede">Every alert lands in at least one of these lanes.</p>
+      <div class="grid-cats">
+        <article class="card">
+          <h3>Beater commuter</h3>
+          <p>Gets you to work without a car payment.</p>
+        </article>
+        <article class="card">
+          <h3>Winter beater</h3>
+          <p>Starts when it is cold, and a little rust will not ruin your week.</p>
+        </article>
+        <article class="card">
+          <h3>First car</h3>
+          <p>Simple, cheap, and easier to insure.</p>
+        </article>
+        <article class="card">
+          <h3>Mechanic's special</h3>
+          <p>Priced low because it needs work.</p>
+        </article>
+        <article class="card">
+          <h3>Fun and cheap</h3>
+          <p>A toy that still has to be a real deal.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap section" aria-labelledby="score-title">
+      <h2 id="score-title">What a score looks like</h2>
+      <div class="split">
+        <article class="deal">
+          <div class="deal-body">
+            <div class="deal-top">
+              <h3>2012 Honda Civic</h3>
+              <div class="price">$2,800</div>
+            </div>
+            <p class="meta">Billings, MT · 168,000 mi</p>
+            <p class="score">2012 Civic, $2,800, about $900 under market.</p>
+            <ul class="tags">
+              <li>First car</li>
+              <li>Beater commuter</li>
+            </ul>
+          </div>
+        </article>
+        <div>
+          <p class="lede">The score is the whole pitch. Year, price, and how far under the usual asking price it sits. No mystery grades.</p>
+          <p class="muted">Paid plans get that line the moment the car shows up. The free feed waits 24 hours.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap section" id="free">
+      <h2>Free email, one day later</h2>
+      <p class="lede">Confirm your email and we will keep you on the delayed feed. Upgrade whenever you want the instant version.</p>
+      <form id="subscribe-form" class="form">
+        <label>Email
+          <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" />
+        </label>
+        <button class="btn" type="submit">Send confirm link</button>
+        <p id="subscribe-msg" class="msg" role="status"></p>
+      </form>
+    </section>
+
+    <section class="wrap section" id="deals" aria-labelledby="deals-title">
+      <div class="feed-head">
+        <div>
+          <h2 id="deals-title">Recent deals</h2>
+          <p id="feed-note" class="muted">Loading the public feed...</p>
+        </div>
+        <div class="row">
+          <button class="btn secondary" id="feed-latest" type="button" aria-pressed="true">Latest</button>
+          <button class="btn secondary" id="feed-drops" type="button" aria-pressed="false">Price drops</button>
+        </div>
+      </div>
+      <div class="feed" id="feed-list"></div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <span>406 Cheap Rides</span>
+    <span>
+      <a href="/terms">Terms</a>
+      ·
+      <a href="/privacy">Privacy</a>
+    </span>
+  </footer>
+  <script src="/site.js"></script>
+</body>
+</html>

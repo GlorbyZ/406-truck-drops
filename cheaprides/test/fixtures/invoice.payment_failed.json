@@ -1,0 +1,26 @@
+{
+  "id": "evt_1SxInvoiceFailed",
+  "object": "event",
+  "api_version": "2025-03-31.basil",
+  "created": 1758902000,
+  "livemode": false,
+  "type": "invoice.payment_failed",
+  "data": {
+    "object": {
+      "id": "in_1SxFailed",
+      "object": "invoice",
+      "customer": "cus_SxAdaLovelace",
+      "customer_email": "ada@example.com",
+      "status": "open",
+      "currency": "usd",
+      "amount_due": 700,
+      "attempt_count": 1,
+      "parent": {
+        "type": "subscription_details",
+        "subscription_details": {
+          "subscription": "sub_1SxCheapMonthly"
+        }
+      }
+    }
+  }
+}

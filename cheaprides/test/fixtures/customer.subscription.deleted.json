@@ -1,0 +1,21 @@
+{
+  "id": "evt_1SxSubDeleted",
+  "object": "event",
+  "api_version": "2025-03-31.basil",
+  "created": 1758903000,
+  "livemode": false,
+  "type": "customer.subscription.deleted",
+  "data": {
+    "object": {
+      "id": "sub_1SxCheapMonthly",
+      "object": "subscription",
+      "customer": "cus_SxAdaLovelace",
+      "status": "canceled",
+      "cancel_at_period_end": false,
+      "metadata": {
+        "plan": "monthly",
+        "email": "ada@example.com"
+      }
+    }
+  }
+}

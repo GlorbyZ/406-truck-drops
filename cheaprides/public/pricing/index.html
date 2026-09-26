@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pricing | 406 Cheap Rides</title>
+  <meta name="description" content="Monthly, yearly, or SMS alerts. 7-day free trial, card required, cancel anytime." />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a class="skip" href="#plans">Skip to plans</a>
+  <header class="wrap top">
+    <a class="brand" href="/">406 <span>Cheap Rides</span></a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/#deals">Deals</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/account">Account</a>
+    </nav>
+  </header>
+
+  <main class="wrap page" id="plans">
+    <p class="eyebrow">Pricing</p>
+    <h1>Seven days free.</h1>
+    <p class="lede">Card required up front. Cancel anytime. After the trial, the plan you picked keeps running until you stop it.</p>
+
+    <form id="checkout-form" class="form">
+      <label>Email for the receipt
+        <input type="email" name="email" autocomplete="email" required placeholder="you@example.com" />
+      </label>
+      <div class="prices" style="margin-top: 1rem">
+        <article class="price-card">
+          <p class="kicker">Monthly</p>
+          <p class="amount">$7<span style="font-size:1rem;color:#a8a29e">/mo</span></p>
+          <p>Instant email alerts. Billed every month after the trial.</p>
+          <p style="margin-top:1rem"><button class="btn full" type="submit" data-plan="monthly">Start monthly trial</button></p>
+        </article>
+        <article class="price-card featured">
+          <p class="kicker">Yearly</p>
+          <p class="amount">$49<span style="font-size:1rem;color:#a8a29e">/yr</span></p>
+          <p>Same instant alerts. Save $35 compared with paying monthly.</p>
+          <p style="margin-top:1rem"><button class="btn full" type="submit" data-plan="yearly">Start yearly trial</button></p>
+        </article>
+        <article class="price-card">
+          <p class="kicker">SMS</p>
+          <p class="amount">$12<span style="font-size:1rem;color:#a8a29e">/mo</span></p>
+          <p>Text alerts plus email. Phone number setup comes in a later update. Email alerts start with the trial.</p>
+          <p style="margin-top:1rem"><button class="btn full" type="submit" data-plan="sms">Start SMS trial</button></p>
+        </article>
+      </div>
+      <p id="checkout-msg" class="msg note" role="status"></p>
+    </form>
+    <p class="muted note">Free readers can still <a href="/#free">confirm an email</a> and see deals 24 hours later. <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a> are coming soon.</p>
+  </main>
+
+  <footer class="wrap footer">
+    <span>406 Cheap Rides</span>
+    <span><a href="/account">Account</a></span>
+  </footer>
+  <script src="/site.js"></script>
+</body>
+</html>

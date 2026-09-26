@@ -1,0 +1,37 @@
+{
+  "id": "evt_1SxInvoicePaid",
+  "object": "event",
+  "api_version": "2025-03-31.basil",
+  "created": 1758901000,
+  "livemode": false,
+  "type": "invoice.paid",
+  "data": {
+    "object": {
+      "id": "in_1SxPaid",
+      "object": "invoice",
+      "customer": "cus_SxAdaLovelace",
+      "customer_email": "ada@example.com",
+      "status": "paid",
+      "currency": "usd",
+      "amount_paid": 700,
+      "parent": {
+        "type": "subscription_details",
+        "subscription_details": {
+          "subscription": "sub_1SxCheapMonthly"
+        }
+      },
+      "lines": {
+        "object": "list",
+        "data": [
+          {
+            "id": "il_1Sx",
+            "object": "line_item",
+            "amount": 700,
+            "currency": "usd",
+            "period": { "start": 1893456000, "end": 1896134400 }
+          }
+        ]
+      }
+    }
+  }
+}

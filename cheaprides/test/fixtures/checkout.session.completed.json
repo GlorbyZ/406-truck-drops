@@ -1,0 +1,29 @@
+{
+  "id": "evt_1SxCheckoutCompleted",
+  "object": "event",
+  "api_version": "2025-03-31.basil",
+  "created": 1758900000,
+  "livemode": false,
+  "pending_webhooks": 1,
+  "type": "checkout.session.completed",
+  "data": {
+    "object": {
+      "id": "cs_test_a1SxCheap",
+      "object": "checkout.session",
+      "mode": "subscription",
+      "status": "complete",
+      "payment_status": "paid",
+      "customer": "cus_SxAdaLovelace",
+      "customer_email": "ada@example.com",
+      "customer_details": {
+        "email": "ada@example.com",
+        "name": "Ada Lovelace"
+      },
+      "subscription": "sub_1SxCheapMonthly",
+      "metadata": {
+        "plan": "monthly",
+        "email": "ada@example.com"
+      }
+    }
+  }
+}

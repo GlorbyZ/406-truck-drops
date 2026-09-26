@@ -1,0 +1,8 @@
+{
+  "name": "406-cheap-rides",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
