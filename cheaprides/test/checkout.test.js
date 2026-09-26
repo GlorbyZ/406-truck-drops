@@ -89,6 +89,158 @@ test('checkout uses customer_email when Stripe has no customer yet', async () =>
   }
 });
 
+test('sms checkout is rejected unless SMS_ENABLED is exactly true', async () => {
+  const { db } = createTestDb();
+  const env = makeEnv(db);
+  const blocked = stubFetch(async () => {
+    throw new Error('stripe should not be called');
+  });
+  try {
+    for (const flag of [undefined, 'false', 'TRUE', '1']) {
+      if (flag === undefined) delete env.SMS_ENABLED;
+      else env.SMS_ENABLED = flag;
+      const res = await worker.fetch(
+        new Request('https://cheaprides.406truckdrops.com/api/checkout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: 'ada@example.com', plan: 'sms' }),
+        }),
+        env
+      );
+      assert.equal(res.status, 400);
+      assert.equal((await res.json()).error, 'SMS is not available yet');
+    }
+    assert.equal(blocked.calls.length, 0);
+    const config = await worker.fetch(new Request('https://cheaprides.406truckdrops.com/api/config'), env);
+    assert.equal(config.status, 200);
+    assert.equal((await config.json()).sms_enabled, false);
+  } finally {
+    blocked.restore();
+  }
+
+  env.SMS_ENABLED = 'true';
+  const stub = stubFetch(async ({ url }) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/v1/prices') {
+      assert.equal(parsed.searchParams.get('lookup_keys[]'), 'cheaprides_sms_monthly');
+      return jsonResponse({ data: [{ id: 'price_sms', lookup_key: 'cheaprides_sms_monthly' }] });
+    }
+    if (parsed.pathname === '/v1/customers') return jsonResponse({ data: [] });
+    if (parsed.pathname === '/v1/checkout/sessions') {
+      return jsonResponse({ id: 'cs_sms', url: 'https://checkout.stripe.com/c/pay/cs_sms' });
+    }
+    throw new Error('unexpected fetch ' + url);
+  });
+  try {
+    const res = await worker.fetch(
+      new Request('https://cheaprides.406truckdrops.com/api/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'ada@example.com', plan: 'sms' }),
+      }),
+      env
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).url, 'https://checkout.stripe.com/c/pay/cs_sms');
+    const params = new URLSearchParams(formCalls(stub, '/v1/checkout/sessions')[0].opts.body);
+    assert.equal(params.get('line_items[0][price]'), 'price_sms');
+    assert.equal(params.get('metadata[plan]'), 'sms');
+    const config = await worker.fetch(new Request('https://cheaprides.406truckdrops.com/api/config'), env);
+    assert.equal((await config.json()).sms_enabled, true);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('checkout logs the stripe error type and code without secrets', async () => {
+  const { db } = createTestDb();
+  const env = makeEnv(db);
+  const lines = [];
+  const original = console.error;
+  console.error = (...args) => {
+    lines.push(args.join(' '));
+  };
+  const stub = stubFetch(async ({ url }) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/v1/prices') {
+      return jsonResponse(
+        {
+          error: {
+            type: 'invalid_request_error',
+            code: 'resource_missing',
+            message: 'No such price: cheaprides_monthly',
+          },
+        },
+        400
+      );
+    }
+    throw new Error('unexpected fetch ' + url);
+  });
+  try {
+    const res = await worker.fetch(
+      new Request('https://cheaprides.406truckdrops.com/api/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'ada@example.com', plan: 'monthly' }),
+      }),
+      env
+    );
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).error, 'No such price: cheaprides_monthly');
+    const log = lines.join('\n');
+    assert.match(log, /\[cheaprides checkout\]/);
+    assert.match(log, /type=invalid_request_error/);
+    assert.match(log, /code=resource_missing/);
+    assert.doesNotMatch(log, /sk_test|whsec_|Bearer/);
+  } finally {
+    stub.restore();
+    console.error = original;
+  }
+});
+
+test('checkout replaces a stripe message that contains a secret', async () => {
+  const { db } = createTestDb();
+  const env = makeEnv(db);
+  const lines = [];
+  const original = console.error;
+  console.error = (...args) => {
+    lines.push(args.join(' '));
+  };
+  const stub = stubFetch(async () =>
+    jsonResponse(
+      {
+        error: {
+          type: 'api_error',
+          code: 'secret_leaked',
+          message: 'refused key sk_test_123',
+        },
+      },
+      400
+    )
+  );
+  try {
+    const res = await worker.fetch(
+      new Request('https://cheaprides.406truckdrops.com/api/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'ada@example.com', plan: 'yearly' }),
+      }),
+      env
+    );
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error, 'Checkout could not be started. Try again in a minute.');
+    assert.doesNotMatch(body.error, /sk_test/);
+    const log = lines.join('\n');
+    assert.match(log, /type=api_error/);
+    assert.match(log, /code=secret_leaked/);
+    assert.doesNotMatch(log, /sk_test/);
+  } finally {
+    stub.restore();
+    console.error = original;
+  }
+});
+
 test('portal requires a session and redirects to Stripe', async () => {
   const { db } = createTestDb();
   const env = makeEnv(db, { EMAIL_ALLOWLIST: 'ada@example.com' });

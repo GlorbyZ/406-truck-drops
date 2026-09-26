@@ -227,7 +227,7 @@ function initCheckout() {
         location.href = data.url;
         return;
       }
-      setMsg(msg, 'Could not start checkout. Try again.', 'bad');
+      setMsg(msg, (data && data.error) || 'Could not start checkout. Try again.', 'bad');
     } catch {
       setMsg(msg, 'Could not start checkout. Try again.', 'bad');
     } finally {
@@ -319,7 +319,21 @@ async function initAccount() {
   }
 }
 
+async function initSmsPlan() {
+  const card = document.getElementById('sms-plan');
+  if (!card) return;
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.sms_enabled) card.hidden = false;
+  } catch {
+    /* SMS stays hidden when config cannot be read. */
+  }
+}
+
 initFeed();
 initSubscribe();
 initCheckout();
 initAccount();
+initSmsPlan();

@@ -8,13 +8,15 @@ compatibility_date = "2026-01-15"
 # Plain vars. Secrets are NOT stored here. Put those with `wrangler pages secret put`.
 # ALLOW_REAL_SENDS must stay "false" until you mean to email people outside EMAIL_ALLOWLIST.
 [vars]
-APP_URL = "https://cheaprides.406truckdrops.com"
+APP_URL = "https://406-cheap-rides.pages.dev"
 EMAIL_FROM = "406CheapRides <alerts@406truckdrops.com>"
 EMAIL_ALLOWLIST = ""
 ALLOW_REAL_SENDS = "false"
+# Exact string "true" shows the SMS plan and allows plan=sms at checkout.
+SMS_ENABLED = "false"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "cheaprides-db"
-# PLACEHOLDER: replace with the id printed by `wrangler d1 create cheaprides-db`.
-database_id = "REPLACE_WITH_CHEAPRIDES_D1_DATABASE_ID"
+# Test project database for 406-cheap-rides. Do not point this at a Truck Drops database.
+database_id = "a38c0aa7-d691-405c-a08a-7dcbfef70989"

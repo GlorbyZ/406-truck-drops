@@ -23,7 +23,7 @@ From this directory:
 npx wrangler d1 create cheaprides-db
 ```
 
-Copy the printed database id into `wrangler.toml`, replacing `REPLACE_WITH_CHEAPRIDES_D1_DATABASE_ID`. The binding name is `DB` and the database name is `cheaprides-db`. Do not point it at a Truck Drops database.
+The test project already has its database id in `wrangler.toml`: `a38c0aa7-d691-405c-a08a-7dcbfef70989`. The binding name is `DB` and the database name is `cheaprides-db`. Do not point it at a Truck Drops database. A brand new database still comes from `wrangler d1 create`, and you would paste that id in place of the one above.
 
 Apply the schema:
 
@@ -32,7 +32,13 @@ npx wrangler d1 execute cheaprides-db --remote --file=schema.sql
 npx wrangler d1 execute cheaprides-db --local --file=schema.sql
 ```
 
-Tables: `subscribers`, `stripe_events` (webhook idempotency), `login_tokens`, `sessions`, `listings`, `price_history`.
+Tables: `subscribers`, `stripe_events` (webhook idempotency), `login_tokens`, `sessions`, `listings`, `price_history`, `alert_sends` (one row per subscriber, listing, and event so alert retries do not double-send).
+
+If this database was created before `alert_sends` existed, apply the follow-up file instead of re-running the whole schema:
+
+```bash
+npx wrangler d1 execute cheaprides-db --remote --file=migrations/0002_alert_sends.sql
+```
 
 ## 2. Create the Pages project
 
@@ -46,10 +52,11 @@ Plain vars live in `wrangler.toml` and can be overridden in the Pages dashboard:
 
 | Name | Example | Notes |
 | --- | --- | --- |
-| `APP_URL` | `https://cheaprides.406truckdrops.com` | No trailing slash. Checkout and email links use it. |
+| `APP_URL` | `https://406-cheap-rides.pages.dev` | No trailing slash. Checkout and email links use it. This is the test host for now. Swap in `https://cheaprides.406truckdrops.com` when that domain is attached. |
 | `EMAIL_FROM` | `406CheapRides <alerts@406truckdrops.com>` | Resend from address. |
 | `EMAIL_ALLOWLIST` | `you@example.com,partner@example.com` | Comma-separated. Used whenever real sends are off. |
 | `ALLOW_REAL_SENDS` | `false` | Must be the exact string `true` to email people outside the allowlist. Leave it `false`. |
+| `SMS_ENABLED` | `false` | Must be the exact string `true` to show the SMS price and accept `plan=sms` at checkout. Off by default. |
 
 Secrets (never commit these):
 
@@ -79,7 +86,7 @@ Checkout looks up the price by that key. It does not hardcode price ids.
 
 Add a webhook endpoint:
 
-- URL: `https://cheaprides.406truckdrops.com/api/stripe-webhook`
+- URL: `https://406-cheap-rides.pages.dev/api/stripe-webhook` (use the custom domain once it is attached)
 - Events:
   - `checkout.session.completed`
   - `invoice.paid`
@@ -112,7 +119,7 @@ npx wrangler pages dev
 
 ## Email safety
 
-Every outbound message goes through `sendEmail` in `public/_worker.js` (login links and confirm emails today, instant paid alerts later).
+Every outbound message goes through `sendEmail` in `public/_worker.js` (login links, confirm emails, and instant paid alerts).
 
 - If `ALLOW_REAL_SENDS` is not exactly `true`, mail is sent only to addresses in `EMAIL_ALLOWLIST`.
 - Everyone else is skipped. The worker logs `skipped allowlist` and does not call Resend.
@@ -122,7 +129,8 @@ Every outbound message goes through `sendEmail` in `public/_worker.js` (login li
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
-| `POST` | `/api/checkout` | Public | `{email, plan}` with `plan` of `monthly`, `yearly`, or `sms`. Creates a Stripe Checkout Session (`mode=subscription`, 7-day trial, `payment_method_collection=always`). Reuses the Stripe customer when we already have one. Returns `{url}`. |
+| `GET` | `/api/config` | Public | `{sms_enabled}`. True only when `SMS_ENABLED` is exactly `true`. |
+| `POST` | `/api/checkout` | Public | `{email, plan}` with `plan` of `monthly`, `yearly`, or `sms`. `sms` is HTTP 400 unless `SMS_ENABLED` is exactly `true`. Creates a Stripe Checkout Session (`mode=subscription`, 7-day trial, `payment_method_collection=always`). Reuses the Stripe customer when we already have one. Returns `{url}`. Stripe failures log `type` and `code` (no secrets) and return the Stripe message, or a generic line if that message contains a key. |
 | `POST` | `/api/stripe-webhook` | `Stripe-Signature` | Verifies HMAC-SHA256 over `{timestamp}.{raw body}`, 5 minute tolerance, constant-time compare. Idempotent on event id. Updates `paid_until` from the subscription period end, or from `trial_end` while status is `trialing`. A deleted subscription drops the row to the free plan. |
 | `GET` | `/api/portal` | Session cookie | 303 redirect to a Stripe Billing Portal session. |
 | `POST` | `/api/login` | Public | Emails a one-time sign-in link (30 minutes). |
@@ -131,11 +139,11 @@ Every outbound message goes through `sendEmail` in `public/_worker.js` (login li
 | `GET` | `/api/me` | Session | Plan, status, trial end, paid until. |
 | `POST` | `/api/subscribe` | Public | Free double opt-in. Confirm link plus unsubscribe link. |
 | `GET` | `/api/confirm?token=` | Link | Marks the email confirmed. |
-| `GET` | `/api/unsubscribe?token=` | Link | Opts the address out of alert email. Does not cancel Stripe. |
-| `POST` | `/api/ingest` | `Bearer` `INGEST_TOKEN` | Scanner upsert. See `INGEST.md`. Stores only. |
+| `GET` | `/api/unsubscribe?token=` | Link | Opts the address out of alert email. Does not cancel Stripe. Alert mail uses `?email=&sig=` (HMAC of the address) instead of a stored token. |
+| `POST` | `/api/ingest` | `Bearer` `INGEST_TOKEN` | Scanner upsert. See `INGEST.md`. A successful `new` or `price_drop` also fans out instant email to active paid subscribers via `ctx.waitUntil`. |
 | `GET` | `/api/listings` | Optional session | Public feed. `feed=latest` (default) or `feed=price_drops`. Anonymous and free sessions are delayed 24 hours. Active paid sessions (`monthly`, `yearly`, `sms` with `paid_until` in the future) are instant. |
 
-Pages: `/`, `/pricing`, `/account`, `/checkout/success`, `/checkout/cancel`. `/terms` and `/privacy` are placeholders.
+Pages: `/`, `/pricing`, `/account`, `/checkout/success`, `/checkout/cancel`, `/terms`, `/privacy`. Terms and privacy are plain-English drafts. The note `Draft, pending review` is an HTML comment only. Unknown non-API paths return an HTML 404. The SMS card on `/pricing` stays hidden until `SMS_ENABLED` is `true`.
 
 ## Tests
 
@@ -152,7 +160,9 @@ No npm install. The suite stubs `fetch` for Stripe and Resend and uses the built
 - Webhook idempotency
 - Ingest auth, validation, upsert, and price-drop history
 - 24 hour feed delay versus a paid session
-- Email allowlist guard, including login and subscribe
+- Email allowlist guard, including login, subscribe, and instant alert fan-out (dedupe on `alert_sends`)
+- SMS checkout gate and checkout error logging
+- HTML 404 for unknown pages
 
 ## Manual test plan (Stripe test mode)
 
@@ -167,8 +177,9 @@ No npm install. The suite stubs `fetch` for Stripe and Resend and uses the built
 9. Use **Manage billing** on `/account`. It should open the Stripe customer portal.
 10. Cancel the subscription in the portal or with a `customer.subscription.deleted` event. The row should fall back to plan `free` and lose instant feed access.
 11. POST a listing to `/api/ingest` using `INGEST.md`. Anonymous `GET /api/listings` hides it until `seen_at` is 24 hours old. A paid session sees it immediately.
-12. Failure card `4000 0000 0000 0341` can be used later to exercise `invoice.payment_failed` (status becomes `past_due`).
+12. With that same address on `EMAIL_ALLOWLIST` and an active paid row, the `new` ingest should send one email. The subject is the deal score line. Posting the same event again should not send a second copy.
+13. Failure card `4000 0000 0000 0341` can be used later to exercise `invoice.payment_failed` (status becomes `past_due`).
 
-## Left for the next step
+## Left for a later step
 
-`fanOutInstantPaidAlerts` in `public/_worker.js` is the hook for instant email and SMS. Ingest stores the listing and calls the hook, and the hook does not send yet. Phone numbers (`sms_phone`) are in the schema but not collected. Terms and privacy pages are placeholders. Category preferences are stored as JSON and are not edited in the UI yet.
+SMS texts are not sent. `sms_phone` is in the schema but not collected, and the SMS plan stays hidden until `SMS_ENABLED` is exactly `true`. Category preferences are stored as JSON and are not edited in the UI yet. Terms and privacy still need review: replace `[OPERATOR LEGAL NAME]` and `[CONTACT EMAIL]` before treating them as final.

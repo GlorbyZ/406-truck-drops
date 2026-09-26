@@ -87,3 +87,16 @@ CREATE TABLE IF NOT EXISTS price_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_price_history_listing ON price_history (listing_id, seen_at);
+
+-- One row per subscriber, listing, and event (new or price_drop). Stops alert retries from sending twice.
+CREATE TABLE IF NOT EXISTS alert_sends (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subscriber_id INTEGER NOT NULL,
+  listing_id TEXT NOT NULL,
+  event TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE (subscriber_id, listing_id, event),
+  FOREIGN KEY (subscriber_id) REFERENCES subscribers (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_alert_sends_listing ON alert_sends (listing_id, event);

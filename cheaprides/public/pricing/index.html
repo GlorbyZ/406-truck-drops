@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pricing | 406 Cheap Rides</title>
-  <meta name="description" content="Monthly, yearly, or SMS alerts. 7-day free trial, card required, cancel anytime." />
+  <meta name="description" content="Monthly or yearly alerts. 7-day free trial, card required, cancel anytime." />
   <meta name="theme-color" content="#0a0a0a" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -45,7 +45,7 @@
           <p>Same instant alerts. Save $35 compared with paying monthly.</p>
           <p style="margin-top:1rem"><button class="btn full" type="submit" data-plan="yearly">Start yearly trial</button></p>
         </article>
-        <article class="price-card">
+        <article class="price-card" id="sms-plan" hidden>
           <p class="kicker">SMS</p>
           <p class="amount">$12<span style="font-size:1rem;color:#a8a29e">/mo</span></p>
           <p>Text alerts plus email. Phone number setup comes in a later update. Email alerts start with the trial.</p>
@@ -54,7 +54,7 @@
       </div>
       <p id="checkout-msg" class="msg note" role="status"></p>
     </form>
-    <p class="muted note">Free readers can still <a href="/#free">confirm an email</a> and see deals 24 hours later. <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a> are coming soon.</p>
+    <p class="muted note">Free readers can still <a href="/#free">confirm an email</a> and see deals 24 hours later. Read the <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a> pages.</p>
   </main>
 
   <footer class="wrap footer">

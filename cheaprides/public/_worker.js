@@ -227,18 +227,20 @@ export async function sendEmail(env, message) {
     console.log('[cheaprides email] skipped not_configured to=' + to + ' subject=' + subject);
     return { ok: false, skipped: true, reason: 'not_configured' };
   }
+  const payload = {
+    from: env.EMAIL_FROM,
+    to: [to],
+    subject,
+    text,
+  };
+  if (message.html && typeof message.html === 'string') payload.html = message.html;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: 'Bearer ' + env.RESEND_API_KEY,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      from: env.EMAIL_FROM,
-      to: [to],
-      subject,
-      text,
-    }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     console.log('[cheaprides email] resend failed status=' + res.status + ' to=' + to);
@@ -455,11 +457,7 @@ async function stripeGet(env, path) {
     headers: { Authorization: 'Bearer ' + env.STRIPE_SECRET_KEY },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error((data.error && data.error.message) || 'stripe request failed');
-    err.status = res.status;
-    throw err;
-  }
+  if (!res.ok) throw stripeRequestError(data, res.status);
   return data;
 }
 
@@ -478,12 +476,43 @@ async function stripePost(env, path, params) {
     body: formEncode(params),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error((data.error && data.error.message) || 'stripe request failed');
-    err.status = res.status;
-    throw err;
-  }
+  if (!res.ok) throw stripeRequestError(data, res.status);
   return data;
+}
+
+function stripeRequestError(data, status) {
+  const stripeError = data && data.error && typeof data.error === 'object' ? data.error : {};
+  const err = new Error(stripeError.message || 'stripe request failed');
+  err.status = status;
+  if (typeof stripeError.type === 'string') err.stripeType = stripeError.type;
+  if (typeof stripeError.code === 'string') err.stripeCode = stripeError.code;
+  return err;
+}
+
+function smsEnabled(env) {
+  return !!(env && env.SMS_ENABLED === 'true');
+}
+
+function checkoutErrorMessage(message) {
+  const text = typeof message === 'string' ? message : '';
+  if (!text || /sk_|rk_|whsec_|Bearer/i.test(text)) {
+    return 'Checkout could not be started. Try again in a minute.';
+  }
+  return text;
+}
+
+function logCheckoutError(err) {
+  const stripeType = err && typeof err.stripeType === 'string' ? err.stripeType : '';
+  const stripeCode = err && typeof err.stripeCode === 'string' ? err.stripeCode : '';
+  const status = err && err.status ? err.status : '';
+  const raw = err && err.message ? err.message : '';
+  console.error(
+    '[cheaprides checkout]',
+    'type=' + stripeType,
+    'code=' + stripeCode,
+    'status=' + status,
+    'message=' + checkoutErrorMessage(raw)
+  );
 }
 
 async function fetchSubscription(env, id) {
@@ -603,6 +632,7 @@ async function checkoutPost({ request, env }) {
   const plan = body.value.plan;
   if (!email) return json({ error: 'enter a valid email' }, 400);
   if (!PLANS[plan]) return json({ error: 'plan must be monthly, yearly, or sms' }, 400);
+  if (plan === 'sms' && !smsEnabled(env)) return json({ error: 'SMS is not available yet' }, 400);
   try {
     const priceId = await lookupPriceId(env, PLANS[plan]);
     const customerId = await findStripeCustomerId(env, email);
@@ -629,10 +659,14 @@ async function checkoutPost({ request, env }) {
     }
     return json({ url: session.url });
   } catch (err) {
-    console.error('[cheaprides checkout]', err && err.message ? err.message : err);
+    logCheckoutError(err);
     const status = err && err.status && err.status >= 400 && err.status < 500 ? 400 : 502;
-    return json({ error: 'checkout failed' }, status);
+    return json({ error: checkoutErrorMessage(err && err.message) }, status);
   }
+}
+
+function configGet({ env }) {
+  return json({ sms_enabled: smsEnabled(env) });
 }
 
 function isInstantAccess(row, nowMs = Date.now()) {
@@ -902,8 +936,36 @@ async function confirmGet({ request, env }) {
   );
 }
 
+async function unsubscribeSignature(env, email) {
+  if (!env.SESSION_SECRET) return '';
+  return hmacHex(env.SESSION_SECRET, 'unsub:' + email);
+}
+
+async function unsubscribeUrlFor(env, email) {
+  const normalized = normalizeEmail(email) || String(email || '').trim().toLowerCase();
+  const sig = await unsubscribeSignature(env, normalized);
+  return appUrl(env) + '/api/unsubscribe?email=' + encodeURIComponent(normalized) + '&sig=' + sig;
+}
+
 async function unsubscribeGet({ request, env }) {
-  const token = new URL(request.url).searchParams.get('token') || '';
+  const url = new URL(request.url);
+  const emailParam = url.searchParams.get('email') || '';
+  const sig = url.searchParams.get('sig') || '';
+  if (emailParam || sig) {
+    const email = normalizeEmail(emailParam);
+    if (!email || !sig || !env.SESSION_SECRET) {
+      return htmlPage('Unsubscribe', 'That unsubscribe link is invalid.');
+    }
+    const expected = await unsubscribeSignature(env, email);
+    if (!safeEqualStr(expected, sig.toLowerCase())) {
+      return htmlPage('Unsubscribe', 'That unsubscribe link is invalid.');
+    }
+    const row = await env.DB.prepare('SELECT email FROM subscribers WHERE email = ?').bind(email).first();
+    if (!row) return htmlPage('Unsubscribe', 'That unsubscribe link is invalid.');
+    await updateSubscriberByEmail(env.DB, row.email, { alert_opt_out: 1, updated_at: isoNow() });
+    return htmlPage('Unsubscribed', 'You will not get Cheap Rides alert emails. Billing is unchanged.');
+  }
+  const token = url.searchParams.get('token') || '';
   if (!token || token.length > 200) return htmlPage('Unsubscribe', 'That unsubscribe link is invalid.');
   const hash = await sha256Hex(token);
   const row = await env.DB.prepare('SELECT email FROM subscribers WHERE unsubscribe_token_hash = ?')
@@ -1076,20 +1138,127 @@ export function validateIngestItem(body) {
   };
 }
 
-/* HOOK: fanOutInstantPaidAlerts
-   Next step. Paid plans (monthly, yearly, sms) should be notified here the
-   moment a listing is new or drops in price. Free subscribers stay on the
-   delayed GET /api/listings feed. Ingest only stores data for now.
-   Send mail through sendEmail so the allowlist guard still applies. */
+function subscriberWantsListing(categoriesRaw, listingCategories) {
+  const prefs = parseCategories(categoriesRaw);
+  if (!prefs.length) return true;
+  const have = new Set(Array.isArray(listingCategories) ? listingCategories : []);
+  return prefs.some((cat) => have.has(cat));
+}
+
+function alertText(listing, unsubUrl) {
+  const score = listing.deal_score_text || listing.title || 'New cheap ride';
+  const lines = [score];
+  if (listing.title && listing.title !== score) lines.push(listing.title);
+  if (Number.isInteger(listing.price)) lines.push('Price: $' + listing.price.toLocaleString('en-US'));
+  const place = [listing.city, listing.state].filter(Boolean).join(', ');
+  if (place) lines.push(place);
+  if (typeof listing.hero_photo_url === 'string' && /^https?:\/\//i.test(listing.hero_photo_url)) {
+    lines.push('Photo: ' + listing.hero_photo_url);
+  }
+  if (listing.url) lines.push(listing.url);
+  lines.push('');
+  lines.push('Unsubscribe:');
+  lines.push(unsubUrl);
+  return lines.join('\n');
+}
+
+function alertHtml(listing, unsubUrl) {
+  const score = escapeHtml(listing.deal_score_text || listing.title || 'New cheap ride');
+  const title = escapeHtml(listing.title || '');
+  const url = typeof listing.url === 'string' && /^https?:\/\//i.test(listing.url) ? listing.url : '';
+  const photo =
+    typeof listing.hero_photo_url === 'string' && /^https?:\/\//i.test(listing.hero_photo_url)
+      ? listing.hero_photo_url
+      : '';
+  const place = [listing.city, listing.state].filter(Boolean).join(', ');
+  const price = Number.isInteger(listing.price) ? '$' + listing.price.toLocaleString('en-US') : '';
+  const facts = [price, place].filter(Boolean).join(', ');
+  let html = '<p>' + score + '</p>';
+  if (title) {
+    html += url ? '<p><a href="' + escapeHtml(url) + '">' + title + '</a></p>' : '<p>' + title + '</p>';
+  }
+  if (facts) html += '<p>' + escapeHtml(facts) + '</p>';
+  if (photo) html += '<p><img src="' + escapeHtml(photo) + '" alt="' + (title || 'Listing photo') + '" /></p>';
+  if (url && !title) html += '<p><a href="' + escapeHtml(url) + '">View listing</a></p>';
+  html += '<p><a href="' + escapeHtml(unsubUrl) + '">Unsubscribe</a></p>';
+  return html;
+}
+
+async function releaseAlertClaim(db, subscriberId, listingId, eventName) {
+  await db
+    .prepare('DELETE FROM alert_sends WHERE subscriber_id = ? AND listing_id = ? AND event = ?')
+    .bind(subscriberId, listingId, eventName)
+    .run();
+}
+
+/* Emails active paid subscribers when a listing is new or the price drops.
+   One row in alert_sends per subscriber, listing, and event. A successful
+   send keeps the row so a retry does not mail twice. A skip or failure
+   deletes the row so a later ingest can try again. Mail goes through sendEmail. */
 export async function fanOutInstantPaidAlerts(env, listing, eventName) {
-  if (!env) return { sent: 0, implemented: false };
-  if (eventName !== 'new' && eventName !== 'price_drop') return { sent: 0, implemented: false };
-  return {
-    sent: 0,
-    implemented: false,
-    event: eventName,
-    listing_id: listing && listing.listing_id ? listing.listing_id : null,
-  };
+  if (!env || !env.DB) return { sent: 0, skipped: 0 };
+  if (eventName !== 'new' && eventName !== 'price_drop') return { sent: 0, skipped: 0 };
+  if (!listing || !listing.listing_id) return { sent: 0, skipped: 0 };
+  const now = isoNow();
+  const { results } = await env.DB.prepare(
+    'SELECT id, email, categories FROM subscribers ' +
+      'WHERE email_confirmed = 1 AND alert_opt_out = 0 AND status = ? ' +
+      "AND plan IN ('monthly', 'yearly', 'sms') " +
+      'AND paid_until IS NOT NULL AND paid_until > ?'
+  )
+    .bind('active', now)
+    .all();
+  let sent = 0;
+  let skipped = 0;
+  for (const row of results || []) {
+    if (!subscriberWantsListing(row.categories, listing.categories)) {
+      skipped += 1;
+      continue;
+    }
+    const claim = await env.DB.prepare(
+      'INSERT INTO alert_sends (subscriber_id, listing_id, event, created_at) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(subscriber_id, listing_id, event) DO NOTHING'
+    )
+      .bind(row.id, listing.listing_id, eventName, now)
+      .run();
+    const changes = claim && claim.meta ? claim.meta.changes : 0;
+    if (!changes) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      const unsubUrl = await unsubscribeUrlFor(env, row.email);
+      const result = await sendEmail(env, {
+        to: row.email,
+        subject: listing.deal_score_text,
+        text: alertText(listing, unsubUrl),
+        html: alertHtml(listing, unsubUrl),
+      });
+      if (!result.ok) {
+        await releaseAlertClaim(env.DB, row.id, listing.listing_id, eventName);
+        skipped += 1;
+        continue;
+      }
+      sent += 1;
+    } catch (err) {
+      await releaseAlertClaim(env.DB, row.id, listing.listing_id, eventName);
+      console.error('[cheaprides alerts]', err && err.message ? err.message : err);
+      skipped += 1;
+    }
+  }
+  return { sent, skipped, event: eventName, listing_id: listing.listing_id };
+}
+
+function scheduleAlertFanOut(ctx, env, listing, eventName) {
+  const task = fanOutInstantPaidAlerts(env, listing, eventName).catch((err) => {
+    console.error('[cheaprides alerts]', err && err.message ? err.message : err);
+    return { sent: 0, skipped: 0, error: true };
+  });
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(task);
+    return null;
+  }
+  return task;
 }
 
 async function recordPriceHistory(db, item) {
@@ -1182,7 +1351,7 @@ async function upsertListing(db, item) {
   return 'updated';
 }
 
-async function applyIngestItem(env, item) {
+async function applyIngestItem(env, item, ctx) {
   if (item.event === 'inactive') {
     const updated = await env.DB.prepare('UPDATE listings SET active = 0, updated_at = ? WHERE listing_id = ?')
       .bind(isoNow(), item.listing_id)
@@ -1206,12 +1375,12 @@ async function applyIngestItem(env, item) {
     deal_score_text: item.deal_score_text,
     url: item.url,
     title: item.title,
+    city: item.city,
+    state: item.state,
+    hero_photo_url: item.hero_photo_url,
   };
-  try {
-    await fanOutInstantPaidAlerts(env, stored, item.event);
-  } catch (err) {
-    console.error('[cheaprides alerts]', err && err.message ? err.message : err);
-  }
+  const pending = scheduleAlertFanOut(ctx, env, stored, item.event);
+  if (pending) await pending;
   return {
     ok: true,
     listing_id: item.listing_id,
@@ -1228,7 +1397,7 @@ function ingestAuthorized(request, env) {
   return true;
 }
 
-async function ingestPost({ request, env }) {
+async function ingestPost({ request, env, ctx }) {
   if (!ingestAuthorized(request, env)) return json({ error: 'unauthorized' }, 401);
   const body = await readJson(request);
   if (!body.ok) return json({ error: 'invalid JSON' }, 400);
@@ -1264,7 +1433,7 @@ async function ingestPost({ request, env }) {
   }
   const results = [];
   for (const entry of validated) {
-    const saved = await applyIngestItem(env, entry.result.value);
+    const saved = await applyIngestItem(env, entry.result.value, ctx);
     results.push({ index: entry.index, ...saved });
   }
   return json({ ok: true, results });
@@ -1340,12 +1509,29 @@ function notFound() {
   return json({ error: 'not found' }, 404);
 }
 
+function notFoundPage() {
+  const body =
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>Page not found | 406 Cheap Rides</title>' +
+    '<link rel="stylesheet" href="/styles.css"></head><body>' +
+    '<header class="wrap top"><a class="brand" href="/">406 <span>Cheap Rides</span></a></header>' +
+    '<main class="wrap page"><p class="eyebrow">404</p><h1>Page not found</h1>' +
+    '<p class="lede">That page is not on 406 Cheap Rides.</p>' +
+    '<p><a class="btn" href="/">Back home</a></p></main></body></html>';
+  return new Response(body, {
+    status: 404,
+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+  });
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     let path = url.pathname;
     if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
     try {
+      if (path === '/api/config' && request.method === 'GET') return configGet({ env });
       if (path === '/api/checkout' && request.method === 'POST') return await checkoutPost({ request, env });
       if (path === '/api/stripe-webhook' && request.method === 'POST') return await stripeWebhookPost({ request, env });
       if (path === '/api/portal' && request.method === 'GET') return await portalGet({ request, env });
@@ -1356,11 +1542,14 @@ export default {
       if (path === '/api/subscribe' && request.method === 'POST') return await subscribePost({ request, env });
       if (path === '/api/confirm' && request.method === 'GET') return await confirmGet({ request, env });
       if (path === '/api/unsubscribe' && request.method === 'GET') return await unsubscribeGet({ request, env });
-      if (path === '/api/ingest' && request.method === 'POST') return await ingestPost({ request, env });
+      if (path === '/api/ingest' && request.method === 'POST') return await ingestPost({ request, env, ctx });
       if (path === '/api/listings' && request.method === 'GET') return await listingsGet({ request, env });
       if (path.startsWith('/api/')) return notFound();
-      if (!env.ASSETS) return new Response('not found', { status: 404 });
-      return await env.ASSETS.fetch(request);
+      if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        const asset = await env.ASSETS.fetch(request);
+        if (asset && asset.status !== 404) return asset;
+      }
+      return notFoundPage();
     } catch (err) {
       console.error('[cheaprides]', err && err.message ? err.message : err);
       return json({ error: 'internal error' }, 500);

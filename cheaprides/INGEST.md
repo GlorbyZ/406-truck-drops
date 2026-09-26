@@ -1,12 +1,14 @@
 # 406 Cheap Rides ingest contract
 
-The scanner POSTs listings here. This endpoint stores them. It does not email or text anyone yet. Instant paid alerts will be added in `fanOutInstantPaidAlerts` inside `public/_worker.js`.
+The scanner POSTs listings here. This endpoint stores them. A successful `new` or `price_drop` also emails active paid subscribers from `fanOutInstantPaidAlerts` in `public/_worker.js`. That work runs in `ctx.waitUntil` so the ingest response does not wait on mail. Every message goes through `sendEmail`, so the allowlist guard still applies unless `ALLOW_REAL_SENDS` is exactly `true`. One row in `alert_sends` (unique on subscriber, listing, and event) stops a retry from sending the same alert twice. This endpoint does not send SMS.
 
 ## Request
 
 `POST /api/ingest`
 
-Production URL: `https://cheaprides.406truckdrops.com/api/ingest`
+Current test URL: `https://406-cheap-rides.pages.dev/api/ingest`
+
+Planned custom domain: `https://cheaprides.406truckdrops.com/api/ingest`
 
 Header:
 
@@ -194,4 +196,4 @@ The `new` object in that snippet is incomplete on purpose: the whole batch would
 
 ## Public read model
 
-Ingest does not return the feed. Readers use `GET /api/listings`. Anonymous and free accounts only see rows with `seen_at` at least 24 hours old. That delay is why paid alerts have to leave from `fanOutInstantPaidAlerts` later, not from the public feed.
+Ingest does not return the feed. Readers use `GET /api/listings`. Anonymous and free accounts only see rows with `seen_at` at least 24 hours old. Paid subscribers with `paid_until` in the future, a confirmed email, and alerts still on get the instant email from `fanOutInstantPaidAlerts` instead of waiting on that delay. An empty category list means every deal. Any other list only matches listings in those categories.
