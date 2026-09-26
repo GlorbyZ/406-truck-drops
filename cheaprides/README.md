@@ -123,7 +123,7 @@ Every outbound message goes through `sendEmail` in `public/_worker.js` (login li
 
 - If `ALLOW_REAL_SENDS` is not exactly `true`, mail is sent only to addresses in `EMAIL_ALLOWLIST`.
 - Everyone else is skipped. The worker logs `skipped allowlist` and does not call Resend.
-- The default in `wrangler.toml` is `ALLOW_REAL_SENDS = "false"` and an empty allowlist, so a fresh deploy sends no mail.
+- The default in `wrangler.toml` is `ALLOW_REAL_SENDS = "false"` and `EMAIL_ALLOWLIST = "zaylynbyoung@gmail.com"`. A deploy from this folder keeps that allowlist and does not mail anyone else.
 
 ## API
 

@@ -633,6 +633,12 @@ async function checkoutPost({ request, env }) {
   if (!email) return json({ error: 'enter a valid email' }, 400);
   if (!PLANS[plan]) return json({ error: 'plan must be monthly, yearly, or sms' }, 400);
   if (plan === 'sms' && !smsEnabled(env)) return json({ error: 'SMS is not available yet' }, 400);
+  const existing = await env.DB.prepare('SELECT plan, status, paid_until FROM subscribers WHERE email = ?')
+    .bind(email)
+    .first();
+  if (blocksDuplicateCheckout(existing)) {
+    return json({ error: 'You already have a subscription. Manage billing at /account.' }, 409);
+  }
   try {
     const priceId = await lookupPriceId(env, PLANS[plan]);
     const customerId = await findStripeCustomerId(env, email);
@@ -667,6 +673,18 @@ async function checkoutPost({ request, env }) {
 
 function configGet({ env }) {
   return json({ sms_enabled: smsEnabled(env) });
+}
+
+/* A live paid row should not open a second Checkout session.
+   Free accounts stay eligible. Trialing is stored as active plus a future paid_until. */
+function blocksDuplicateCheckout(row, nowMs = Date.now()) {
+  if (!row) return false;
+  const paidPlan = row.plan === 'monthly' || row.plan === 'yearly' || row.plan === 'sms';
+  const until = row.paid_until ? Date.parse(row.paid_until) : NaN;
+  const paidAhead = Number.isFinite(until) && until > nowMs;
+  if (paidAhead && paidPlan) return true;
+  if (paidPlan && (row.status === 'active' || row.status === 'trialing')) return true;
+  return false;
 }
 
 function isInstantAccess(row, nowMs = Date.now()) {

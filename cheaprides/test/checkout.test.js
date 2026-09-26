@@ -89,6 +89,91 @@ test('checkout uses customer_email when Stripe has no customer yet', async () =>
   }
 });
 
+test('checkout rejects a second subscription for a live paid email', async () => {
+  const { db } = createTestDb();
+  const env = makeEnv(db);
+  const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  async function post(email) {
+    return worker.fetch(
+      new Request('https://cheaprides.406truckdrops.com/api/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, plan: 'monthly' }),
+      }),
+      env
+    );
+  }
+  const stub = stubFetch(async () => {
+    throw new Error('stripe should not be called');
+  });
+  try {
+    await seedSubscriber(db, {
+      email: 'live@example.com',
+      plan: 'monthly',
+      status: 'active',
+      paid_until: future,
+      stripe_customer_id: 'cus_live',
+      stripe_subscription_id: 'sub_live',
+    });
+    const live = await post('Live@Example.com');
+    assert.equal(live.status, 409);
+    assert.equal((await live.json()).error, 'You already have a subscription. Manage billing at /account.');
+
+    await seedSubscriber(db, {
+      email: 'lapsed-active@example.com',
+      plan: 'yearly',
+      status: 'active',
+      paid_until: past,
+      stripe_customer_id: 'cus_lapsed_active',
+      stripe_subscription_id: 'sub_lapsed_active',
+    });
+    const stillActive = await post('lapsed-active@example.com');
+    assert.equal(stillActive.status, 409);
+
+    await seedSubscriber(db, {
+      email: 'ahead@example.com',
+      plan: 'monthly',
+      status: 'past_due',
+      paid_until: future,
+      stripe_customer_id: 'cus_ahead',
+      stripe_subscription_id: 'sub_ahead',
+    });
+    const ahead = await post('ahead@example.com');
+    assert.equal(ahead.status, 409);
+    assert.equal(stub.calls.length, 0);
+  } finally {
+    stub.restore();
+  }
+
+  await seedSubscriber(db, {
+    email: 'expired@example.com',
+    plan: 'monthly',
+    status: 'past_due',
+    paid_until: past,
+    stripe_customer_id: 'cus_expired',
+    stripe_subscription_id: 'sub_expired',
+  });
+  const open = stubFetch(async ({ url }) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/v1/prices') {
+      return jsonResponse({ data: [{ id: 'price_1SxMonthly', lookup_key: 'cheaprides_monthly' }] });
+    }
+    if (parsed.pathname === '/v1/customers') return jsonResponse({ data: [] });
+    if (parsed.pathname === '/v1/checkout/sessions') {
+      return jsonResponse({ id: 'cs_ok', url: 'https://checkout.stripe.com/c/pay/cs_ok' });
+    }
+    throw new Error('unexpected fetch ' + url);
+  });
+  try {
+    const res = await post('expired@example.com');
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).url, 'https://checkout.stripe.com/c/pay/cs_ok');
+  } finally {
+    open.restore();
+  }
+});
+
 test('sms checkout is rejected unless SMS_ENABLED is exactly true', async () => {
   const { db } = createTestDb();
   const env = makeEnv(db);

@@ -10,7 +10,7 @@ compatibility_date = "2026-01-15"
 [vars]
 APP_URL = "https://406-cheap-rides.pages.dev"
 EMAIL_FROM = "406CheapRides <alerts@406truckdrops.com>"
-EMAIL_ALLOWLIST = ""
+EMAIL_ALLOWLIST = "zaylynbyoung@gmail.com"
 ALLOW_REAL_SENDS = "false"
 # Exact string "true" shows the SMS plan and allows plan=sms at checkout.
 SMS_ENABLED = "false"

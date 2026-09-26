@@ -141,6 +141,7 @@ function initNav() {
     const open = button.getAttribute('aria-expanded') !== 'true';
     button.setAttribute('aria-expanded', String(open));
     nav.classList.toggle('is-open', open);
+    document.body.classList.toggle('nav-lock', open);
   });
 }
 
@@ -272,6 +273,21 @@ function initCheckout() {
       const { res, data } = await postJson('/api/checkout', { email, plan });
       if (res.ok && data.url) {
         location.href = data.url;
+        return;
+      }
+      if (res.status === 409 && data && data.error) {
+        msg.className = 'msg bad';
+        msg.replaceChildren();
+        const parts = String(data.error).split('/account');
+        parts.forEach((part, index) => {
+          msg.append(document.createTextNode(part));
+          if (index < parts.length - 1) {
+            const link = document.createElement('a');
+            link.href = '/account';
+            link.textContent = '/account';
+            msg.append(link);
+          }
+        });
         return;
       }
       setMsg(msg, (data && data.error) || 'Could not start checkout. Try again.', 'bad');
