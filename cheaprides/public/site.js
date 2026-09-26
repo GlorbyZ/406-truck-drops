@@ -1,0 +1,548 @@
+const CATEGORY_LABELS = {
+  beater_commuter: 'Beater commuter',
+  winter_beater: 'Winter beater',
+  first_car: 'First car',
+  mechanics_special: "Mechanic's special",
+  fun_cheap: 'Fun and cheap',
+};
+
+const PLAN_LABELS = {
+  free: 'Free',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+  sms: 'SMS',
+};
+
+const STATUS_LABELS = {
+  pending: 'Pending email confirm',
+  active: 'Active',
+  past_due: 'Past due',
+  canceled: 'Canceled',
+  none: 'No account yet',
+};
+
+function money(centsOrDollars) {
+  if (centsOrDollars === null || centsOrDollars === undefined) return '';
+  return '$' + Number(centsOrDollars).toLocaleString('en-US');
+}
+
+function formatWhen(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+function safeUrl(value) {
+  if (typeof value !== 'string' || !value) return '';
+  try {
+    const url = new URL(value, location.origin);
+    if (url.origin === location.origin && url.pathname.indexOf('/photos/') === 0) {
+      return url.pathname + url.search;
+    }
+    if (/^https?:\/\//i.test(value) && (url.protocol === 'https:' || url.protocol === 'http:')) return url.href;
+  } catch {
+    /* ignore bad listing urls */
+  }
+  return '';
+}
+
+function setMsg(node, text, kind) {
+  if (!node) return;
+  node.textContent = text || '';
+  node.className = 'msg' + (kind ? ' ' + kind : '');
+}
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+  return { res, data };
+}
+
+function renderListing(listing) {
+  const article = document.createElement('article');
+  const photo = safeUrl(listing.hero_photo_url);
+  article.className = 'card' + (photo ? '' : ' no-photo');
+  if (photo) {
+    const img = document.createElement('img');
+    img.className = 'card-photo';
+    img.src = photo;
+    img.alt = listing.title || 'Listing photo';
+    img.loading = 'lazy';
+    article.appendChild(img);
+  }
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  const top = document.createElement('div');
+  top.className = 'card-top';
+  const h3 = document.createElement('h3');
+  h3.className = 'card-title';
+  h3.textContent = listing.title || 'Untitled';
+  const price = document.createElement('p');
+  price.className = 'card-price';
+  price.textContent = money(listing.price);
+  top.append(h3, price);
+  const meta = document.createElement('p');
+  meta.className = 'card-meta';
+  const place = [listing.city, listing.state].filter(Boolean).join(', ');
+  const miles =
+    listing.mileage === null || listing.mileage === undefined
+      ? ''
+      : Number(listing.mileage).toLocaleString('en-US') + ' mi';
+  meta.textContent = [place, miles].filter(Boolean).join(' · ');
+  const score = document.createElement('p');
+  score.className = 'card-take';
+  score.textContent = listing.deal_score_text || '';
+  body.append(top, meta, score);
+  if (listing.previous_price && listing.drop_flag) {
+    const was = document.createElement('p');
+    was.className = 'meta';
+    was.textContent = 'Was ' + money(listing.previous_price);
+    body.appendChild(was);
+  }
+  const tags = document.createElement('ul');
+  tags.className = 'tags';
+  for (const category of listing.categories || []) {
+    const li = document.createElement('li');
+    li.textContent = CATEGORY_LABELS[category] || category;
+    tags.appendChild(li);
+  }
+  body.appendChild(tags);
+  const href = safeUrl(listing.url);
+  if (href) {
+    const a = document.createElement('a');
+    a.className = 'card-link';
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'View listing';
+    body.appendChild(a);
+  }
+  article.appendChild(body);
+  return article;
+}
+
+function initNav() {
+  document.documentElement.classList.add('js');
+  const button = document.querySelector('.nav-toggle');
+  const nav = document.getElementById('site-nav');
+  if (!button || !nav) return;
+  button.addEventListener('click', () => {
+    const open = button.getAttribute('aria-expanded') !== 'true';
+    button.setAttribute('aria-expanded', String(open));
+    nav.classList.toggle('is-open', open);
+    document.body.classList.toggle('nav-lock', open);
+  });
+}
+
+const NAV_HINT_KEY = 'cr_nav_hint';
+
+function readNavHint() {
+  try {
+    const raw = localStorage.getItem(NAV_HINT_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data.email !== 'string' || !data.email) return null;
+    return { email: data.email, admin: !!data.admin, instant: !!data.instant };
+  } catch {
+    return null;
+  }
+}
+
+function writeNavHint(me) {
+  try {
+    localStorage.setItem(
+      NAV_HINT_KEY,
+      JSON.stringify({ email: me.email, admin: !!me.admin, instant: !!me.instant })
+    );
+  } catch {
+    /* Storage can be blocked. The next /api/me response still paints the nav. */
+  }
+}
+
+function clearNavHint() {
+  try {
+    localStorage.removeItem(NAV_HINT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function signOut(event) {
+  if (event && event.preventDefault) event.preventDefault();
+  clearNavHint();
+  try {
+    const res = await fetch('/api/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error('logout failed');
+    location.href = '/';
+  } catch {
+    location.href = '/api/logout';
+  }
+}
+
+function renderSignedOut(node) {
+  const trial = document.querySelector('[data-nav-trial]');
+  if (trial) trial.hidden = false;
+  if (!node || node.tagName === 'A') return node;
+  const link = document.createElement('a');
+  link.href = '/account';
+  link.setAttribute('data-nav-auth', '');
+  link.textContent = 'Sign in';
+  if (location.pathname === '/account') link.setAttribute('aria-current', 'page');
+  node.replaceWith(link);
+  return link;
+}
+
+function renderSignedIn(node, me) {
+  if (!node || !me || typeof me.email !== 'string' || !me.email) return node;
+  const cluster = document.createElement('span');
+  cluster.className = 'nav-auth';
+  cluster.setAttribute('data-nav-auth', '');
+
+  const account = document.createElement('a');
+  account.className = 'nav-account';
+  account.href = '/account';
+  account.title = me.email;
+  account.textContent = me.email;
+  if (location.pathname === '/account') account.setAttribute('aria-current', 'page');
+  cluster.appendChild(account);
+
+  if (me.admin) {
+    const badge = document.createElement('span');
+    badge.className = 'nav-admin';
+    badge.textContent = 'Admin';
+    cluster.appendChild(badge);
+  }
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'nav-signout';
+  button.textContent = 'Sign out';
+  button.addEventListener('click', signOut);
+  cluster.appendChild(button);
+
+  node.replaceWith(cluster);
+  const trial = document.querySelector('[data-nav-trial]');
+  if (trial) trial.hidden = !!(me.instant || me.admin);
+  return cluster;
+}
+
+function initNavAuth() {
+  const slot = document.querySelector('[data-nav-auth]');
+  if (!slot) return;
+  const hint = readNavHint();
+  if (hint) renderSignedIn(slot, hint);
+  refreshNavAuth();
+  const logout = document.getElementById('logout-btn');
+  if (logout && !logout.dataset.bound) {
+    logout.dataset.bound = '1';
+    logout.addEventListener('click', signOut);
+  }
+}
+
+async function refreshNavAuth() {
+  try {
+    const res = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
+    const slot = document.querySelector('[data-nav-auth]');
+    if (res.status === 401) {
+      clearNavHint();
+      renderSignedOut(slot);
+      return;
+    }
+    if (!res.ok) return;
+    const me = await res.json();
+    if (!me || typeof me.email !== 'string' || !me.email) {
+      clearNavHint();
+      renderSignedOut(slot);
+      return;
+    }
+    writeNavHint(me);
+    renderSignedIn(slot, me);
+  } catch {
+    /* Network error keeps Sign in, or the stored hint, on screen. */
+  }
+}
+
+function initFeed() {
+  const list = document.getElementById('feed-list');
+  if (!list) return;
+  const note = document.getElementById('feed-note');
+  const latestBtn = document.getElementById('feed-latest');
+  const dropsBtn = document.getElementById('feed-drops');
+  const chips = document.querySelectorAll('#cat-chips .chip');
+  let feed = 'latest';
+  let category = new URLSearchParams(location.search).get('cat') || 'all';
+  let lastRows = [];
+
+  function markChips() {
+    let known = false;
+    chips.forEach((chip) => {
+      const on = chip.getAttribute('data-cat') === category;
+      if (on) known = true;
+      chip.classList.toggle('is-on', on);
+    });
+    if (!known) category = 'all';
+    chips.forEach((chip) => {
+      chip.classList.toggle('is-on', chip.getAttribute('data-cat') === category);
+    });
+  }
+
+  function showMessage(text) {
+    list.replaceChildren();
+    const node = document.createElement('div');
+    node.className = 'feed-empty';
+    node.textContent = text;
+    list.appendChild(node);
+  }
+
+  function paint() {
+    const rows = lastRows.filter((listing) => {
+      if (category === 'all') return true;
+      return (listing.categories || []).indexOf(category) !== -1;
+    });
+    list.replaceChildren();
+    if (!rows.length) {
+      showMessage(lastRows.length ? 'Nothing matches that category.' : 'No deals in this feed yet.');
+      return;
+    }
+    for (const listing of rows) list.appendChild(renderListing(listing));
+  }
+
+  async function load() {
+    showMessage('Loading deals...');
+    try {
+      const res = await fetch('/api/listings?feed=' + encodeURIComponent(feed) + '&limit=20');
+      const data = await res.json();
+      if (!res.ok) {
+        showMessage('Could not load deals.');
+        return;
+      }
+      if (note) {
+        note.textContent = data.delayed
+          ? 'Showing deals at least 24 hours old. Paid members see new deals instantly.'
+          : 'You are seeing new deals as soon as they land.';
+      }
+      lastRows = data.listings || [];
+      paint();
+    } catch {
+      showMessage('Could not load deals.');
+    }
+  }
+
+  function select(next) {
+    feed = next;
+    if (latestBtn) {
+      latestBtn.setAttribute('aria-pressed', String(next === 'latest'));
+      latestBtn.classList.toggle('is-on', next === 'latest');
+    }
+    if (dropsBtn) {
+      dropsBtn.setAttribute('aria-pressed', String(next === 'price_drops'));
+      dropsBtn.classList.toggle('is-on', next === 'price_drops');
+    }
+    load();
+  }
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      category = chip.getAttribute('data-cat') || 'all';
+      markChips();
+      paint();
+    });
+  });
+  markChips();
+
+  if (latestBtn) latestBtn.addEventListener('click', () => select('latest'));
+  if (dropsBtn) dropsBtn.addEventListener('click', () => select('price_drops'));
+  load();
+}
+
+function initSubscribe() {
+  const form = document.getElementById('subscribe-form');
+  if (!form) return;
+  const msg = document.getElementById('subscribe-msg');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const email = new FormData(form).get('email');
+    setMsg(msg, 'Sending...');
+    try {
+      const { res, data } = await postJson('/api/subscribe', { email });
+      if (data.already) setMsg(msg, 'That email is already confirmed.', 'ok');
+      else if (res.ok && data.ok) setMsg(msg, 'Check your email for a confirm link.', 'ok');
+      else setMsg(msg, 'Could not sign you up. Try again.', 'bad');
+    } catch {
+      setMsg(msg, 'Could not sign you up. Try again.', 'bad');
+    }
+  });
+}
+
+function initCheckout() {
+  const form = document.getElementById('checkout-form');
+  if (!form) return;
+  const msg = document.getElementById('checkout-msg');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = event.submitter;
+    const plan = button && button.getAttribute('data-plan');
+    if (!plan) return;
+    const email = new FormData(form).get('email');
+    setMsg(msg, 'Starting checkout...');
+    button.disabled = true;
+    try {
+      const { res, data } = await postJson('/api/checkout', { email, plan });
+      if (res.ok && data.url) {
+        location.href = data.url;
+        return;
+      }
+      if (res.status === 409 && data && data.error) {
+        msg.className = 'msg bad';
+        msg.replaceChildren();
+        const parts = String(data.error).split('/account');
+        parts.forEach((part, index) => {
+          msg.append(document.createTextNode(part));
+          if (index < parts.length - 1) {
+            const link = document.createElement('a');
+            link.href = '/account';
+            link.textContent = '/account';
+            msg.append(link);
+          }
+        });
+        return;
+      }
+      setMsg(msg, (data && data.error) || 'Could not start checkout. Try again.', 'bad');
+    } catch {
+      setMsg(msg, 'Could not start checkout. Try again.', 'bad');
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+function fillAccount(data) {
+  const set = (id, text) => {
+    const node = document.getElementById(id);
+    if (node) node.textContent = text;
+  };
+  set('acct-email', data.email || '');
+  if (data.admin) set('acct-plan', 'Admin (permanent)');
+  else set('acct-plan', PLAN_LABELS[data.plan] || data.plan || 'Free');
+  set('acct-status', STATUS_LABELS[data.status] || data.status || '');
+  const when = document.getElementById('acct-until');
+  const label = document.getElementById('acct-until-label');
+  if (when && label) {
+    const trial = data.trial_end && Date.parse(data.trial_end) > Date.now();
+    if (data.admin) {
+      label.textContent = 'Access';
+      when.textContent = 'Permanent';
+    } else if (trial) {
+      label.textContent = 'Trial ends';
+      when.textContent = formatWhen(data.trial_end);
+    } else if (data.paid_until) {
+      label.textContent = 'Paid until';
+      when.textContent = formatWhen(data.paid_until);
+    } else {
+      label.textContent = 'Access';
+      when.textContent = data.plan === 'free' ? 'Free feed, delayed 24 hours' : 'Not active';
+    }
+  }
+  const billing = document.getElementById('billing-link');
+  if (billing) billing.hidden = !data.has_billing;
+  const changePlan = document.getElementById('change-plan');
+  if (changePlan) changePlan.hidden = !!data.admin;
+  const pastDue = document.getElementById('past-due-note');
+  if (pastDue) pastDue.hidden = data.status !== 'past_due';
+}
+
+async function initAccount() {
+  const signedOut = document.getElementById('signed-out');
+  if (!signedOut) return;
+  const signedIn = document.getElementById('signed-in');
+  const params = new URLSearchParams(location.search);
+  const banner = document.getElementById('account-banner');
+  if (params.get('billing') === 'none' && banner) {
+    banner.hidden = false;
+    banner.textContent = 'No Stripe customer on this account yet. Start a trial from Pricing.';
+  }
+  if (params.get('signin') === '1' && banner) {
+    banner.hidden = false;
+    banner.textContent = 'Sign in to manage billing.';
+  }
+
+  let me = null;
+  try {
+    const res = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
+    if (res.ok) me = await res.json();
+  } catch {
+    me = null;
+  }
+  if (me && me.email) {
+    signedOut.hidden = true;
+    if (signedIn) signedIn.hidden = false;
+    if (me.admin && banner) {
+      banner.hidden = true;
+      banner.textContent = '';
+    }
+    fillAccount(me);
+  }
+
+  const form = document.getElementById('login-form');
+  const msg = document.getElementById('login-msg');
+  if (form) {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const email = new FormData(form).get('email');
+      setMsg(msg, 'Sending...');
+      try {
+        const { res, data } = await postJson('/api/login', { email });
+        if (res.ok && data.ok) setMsg(msg, 'Check your email for a sign-in link.', 'ok');
+        else setMsg(msg, 'Could not send the sign-in link. Try again.', 'bad');
+      } catch {
+        setMsg(msg, 'Could not send the sign-in link. Try again.', 'bad');
+      }
+    });
+  }
+
+  const logout = document.getElementById('logout-btn');
+  if (logout && !logout.dataset.bound) {
+    logout.dataset.bound = '1';
+    logout.addEventListener('click', signOut);
+  }
+}
+
+async function initSmsPlan() {
+  const card = document.getElementById('sms-plan');
+  if (!card) return;
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.sms_enabled) card.hidden = false;
+  } catch {
+    /* SMS stays hidden when config cannot be read. */
+  }
+}
+
+initNav();
+initNavAuth();
+initFeed();
+initSubscribe();
+initCheckout();
+initAccount();
+initSmsPlan();

@@ -1,0 +1,29 @@
+{
+  "id": "sub_1SxCheapMonthly",
+  "object": "subscription",
+  "customer": "cus_SxAdaLovelace",
+  "status": "trialing",
+  "trial_end": 1893456000,
+  "metadata": {
+    "plan": "monthly",
+    "email": "ada@example.com"
+  },
+  "items": {
+    "object": "list",
+    "data": [
+      {
+        "id": "si_SxItemMonthly",
+        "object": "subscription_item",
+        "current_period_end": 1894060800,
+        "price": {
+          "id": "price_1SxMonthly",
+          "object": "price",
+          "lookup_key": "cheaprides_monthly",
+          "unit_amount": 700,
+          "currency": "usd",
+          "recurring": { "interval": "month", "interval_count": 1 }
+        }
+      }
+    ]
+  }
+}

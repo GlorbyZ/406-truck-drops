@@ -1,0 +1,39 @@
+{
+  "id": "evt_1SxSubUpdated",
+  "object": "event",
+  "api_version": "2025-03-31.basil",
+  "created": 1758904000,
+  "livemode": false,
+  "type": "customer.subscription.updated",
+  "data": {
+    "object": {
+      "id": "sub_1SxCheapMonthly",
+      "object": "subscription",
+      "customer": "cus_SxAdaLovelace",
+      "status": "active",
+      "trial_end": null,
+      "metadata": {
+        "plan": "monthly",
+        "email": "ada@example.com"
+      },
+      "items": {
+        "object": "list",
+        "data": [
+          {
+            "id": "si_SxItemYearly",
+            "object": "subscription_item",
+            "current_period_end": 1924992000,
+            "price": {
+              "id": "price_1SxYearly",
+              "object": "price",
+              "lookup_key": "cheaprides_yearly",
+              "unit_amount": 4900,
+              "currency": "usd",
+              "recurring": { "interval": "year", "interval_count": 1 }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

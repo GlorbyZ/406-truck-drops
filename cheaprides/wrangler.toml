@@ -1,0 +1,29 @@
+# 406CheapRides Cloudflare Pages project.
+# Deploy by direct upload of ./public (see README). Do not attach Truck Drops D1 databases.
+
+name = "406-cheap-rides"
+pages_build_output_dir = "./public"
+compatibility_date = "2026-01-15"
+
+# Plain vars. Secrets are NOT stored here. Put those with `wrangler pages secret put`.
+# ALLOW_REAL_SENDS must stay "false" until you mean to email people outside EMAIL_ALLOWLIST.
+[vars]
+APP_URL = "https://406-cheap-rides.pages.dev"
+EMAIL_FROM = "406CheapRides <alerts@406truckdrops.com>"
+EMAIL_ALLOWLIST = "zaylynbyoung@gmail.com"
+ALLOW_REAL_SENDS = "false"
+# Exact addresses only. Plus-aliases are not admins. Instant feed, no checkout, and alerts without a paid plan.
+ADMIN_EMAILS = "zaylynbyoung@gmail.com"
+# Exact string "true" shows the SMS plan and allows plan=sms at checkout.
+SMS_ENABLED = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cheaprides-db"
+# Test project database for 406-cheap-rides. Do not point this at a Truck Drops database.
+database_id = "a38c0aa7-d691-405c-a08a-7dcbfef70989"
+
+# R2 listing photos. The Pages project already binds PHOTOS to cheap-rides-photos.
+# [[r2_buckets]]
+# binding = "PHOTOS"
+# bucket_name = "cheap-rides-photos"

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0A0A0A"/>
+  <g transform="translate(96 96) scale(5)">
+    
+  <text x="32" y="27" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" font-size="15" fill="#FF6A1A" letter-spacing="0.5">406</text>
+  <path fill="#FF6A1A" d="M14 40h28l6-8h6c2.2 0 4 1.8 4 4v6H14v-2z"/>
+  <path fill="#E7E5E4" d="M22 32h10l4 6H20z"/>
+  <circle cx="22" cy="46" r="3.4" fill="#0A0A0A"/>
+  <circle cx="46" cy="46" r="3.4" fill="#0A0A0A"/>
+  <circle cx="22" cy="46" r="1.5" fill="#FF6A1A"/>
+  <circle cx="46" cy="46" r="1.5" fill="#FF6A1A"/>
+
+  </g>
+</svg>

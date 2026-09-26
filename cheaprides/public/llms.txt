@@ -1,0 +1,43 @@
+# 406 Cheap Rides
+
+> Cheap car deal alerts around Billings, Montana.
+
+406 Cheap Rides watches public car listings and emails you when a cheap deal shows up near Billings. Paid members get that email when a listing is new or the price drops. The free feed is the same deals, delayed 24 hours.
+
+The service is operated by 406TruckDrops. Questions go to support@406truckdrops.com.
+
+## Plans
+
+- Monthly: $7 per month after a 7-day free trial
+- Yearly: $49 per year after a 7-day free trial
+- The card is collected up front. The plan auto-bills when the trial ends unless you cancel.
+- Cancel anytime from the account page, which opens the Stripe billing portal. Access continues until the period ends.
+- Partial periods are not refunded unless the law requires a refund.
+- Text alerts are not offered yet.
+
+## Categories
+
+- Beater commuters: cars that get you to work without a car payment
+- Winter beaters: cars that start in the cold
+- First cars: simple and cheaper to insure
+- Mechanic's specials: priced low because they need work
+- Fun and cheap: a toy that still has to be a real deal
+
+An empty category list on an account means every deal.
+
+## Coverage
+
+Billings, Montana and about 150 miles around it, including Laurel, Lockwood, Columbus, and Red Lodge.
+
+## Listings
+
+Listings come from public third-party marketplaces. Prices, photos, and availability can be wrong. 406 Cheap Rides is not a party to any vehicle sale.
+
+## Links
+
+- [Home](https://cheaprides.406truckdrops.com/)
+- [Pricing](https://cheaprides.406truckdrops.com/pricing)
+- [Categories](https://cheaprides.406truckdrops.com/categories)
+- [Terms](https://cheaprides.406truckdrops.com/terms)
+- [Privacy](https://cheaprides.406truckdrops.com/privacy)
+- [Full description](https://cheaprides.406truckdrops.com/llms-full.txt)

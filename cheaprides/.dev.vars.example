@@ -1,0 +1,13 @@
+# Copy to .dev.vars for `wrangler pages dev`. Never commit .dev.vars.
+# Plain vars in wrangler.toml are also loaded. Override APP_URL here for local checkout redirects.
+
+APP_URL=http://localhost:8788
+STRIPE_SECRET_KEY=sk_test_replace_me
+STRIPE_WEBHOOK_SECRET=whsec_replace_me
+INGEST_TOKEN=replace_me
+RESEND_API_KEY=re_replace_me
+SESSION_SECRET=replace_me_with_a_long_random_string
+EMAIL_ALLOWLIST=you@example.com
+ALLOW_REAL_SENDS=false
+# Exact addresses. zaylynbyoung+crtest@gmail.com is not an admin of zaylynbyoung@gmail.com.
+ADMIN_EMAILS=you@example.com
