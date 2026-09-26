@@ -39,9 +39,13 @@ function formatWhen(iso) {
 }
 
 function safeUrl(value) {
+  if (typeof value !== 'string' || !value) return '';
   try {
-    const url = new URL(value);
-    if (url.protocol === 'https:' || url.protocol === 'http:') return url.href;
+    const url = new URL(value, location.origin);
+    if (url.origin === location.origin && url.pathname.indexOf('/photos/') === 0) {
+      return url.pathname + url.search;
+    }
+    if (/^https?:\/\//i.test(value) && (url.protocol === 'https:' || url.protocol === 'http:')) return url.href;
   } catch {
     /* ignore bad listing urls */
   }
@@ -305,13 +309,17 @@ function fillAccount(data) {
     if (node) node.textContent = text;
   };
   set('acct-email', data.email || '');
-  set('acct-plan', PLAN_LABELS[data.plan] || data.plan || 'Free');
+  if (data.admin) set('acct-plan', 'Admin (permanent)');
+  else set('acct-plan', PLAN_LABELS[data.plan] || data.plan || 'Free');
   set('acct-status', STATUS_LABELS[data.status] || data.status || '');
   const when = document.getElementById('acct-until');
   const label = document.getElementById('acct-until-label');
   if (when && label) {
     const trial = data.trial_end && Date.parse(data.trial_end) > Date.now();
-    if (trial) {
+    if (data.admin) {
+      label.textContent = 'Access';
+      when.textContent = 'Permanent';
+    } else if (trial) {
       label.textContent = 'Trial ends';
       when.textContent = formatWhen(data.trial_end);
     } else if (data.paid_until) {
@@ -324,6 +332,8 @@ function fillAccount(data) {
   }
   const billing = document.getElementById('billing-link');
   if (billing) billing.hidden = !data.has_billing;
+  const changePlan = document.getElementById('change-plan');
+  if (changePlan) changePlan.hidden = !!data.admin;
   const pastDue = document.getElementById('past-due-note');
   if (pastDue) pastDue.hidden = data.status !== 'past_due';
 }
@@ -353,6 +363,10 @@ async function initAccount() {
   if (me && me.email) {
     signedOut.hidden = true;
     if (signedIn) signedIn.hidden = false;
+    if (me.admin && banner) {
+      banner.hidden = true;
+      banner.textContent = '';
+    }
     fillAccount(me);
   }
 

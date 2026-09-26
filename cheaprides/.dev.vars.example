@@ -9,3 +9,5 @@ RESEND_API_KEY=re_replace_me
 SESSION_SECRET=replace_me_with_a_long_random_string
 EMAIL_ALLOWLIST=you@example.com
 ALLOW_REAL_SENDS=false
+# Exact addresses. zaylynbyoung+crtest@gmail.com is not an admin of zaylynbyoung@gmail.com.
+ADMIN_EMAILS=you@example.com

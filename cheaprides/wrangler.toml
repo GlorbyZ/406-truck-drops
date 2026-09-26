@@ -12,6 +12,8 @@ APP_URL = "https://406-cheap-rides.pages.dev"
 EMAIL_FROM = "406CheapRides <alerts@406truckdrops.com>"
 EMAIL_ALLOWLIST = "zaylynbyoung@gmail.com"
 ALLOW_REAL_SENDS = "false"
+# Exact addresses only. Plus-aliases are not admins. Instant feed, no checkout, and alerts without a paid plan.
+ADMIN_EMAILS = "zaylynbyoung@gmail.com"
 # Exact string "true" shows the SMS plan and allows plan=sms at checkout.
 SMS_ENABLED = "false"
 
@@ -20,3 +22,8 @@ binding = "DB"
 database_name = "cheaprides-db"
 # Test project database for 406-cheap-rides. Do not point this at a Truck Drops database.
 database_id = "a38c0aa7-d691-405c-a08a-7dcbfef70989"
+
+# R2 listing photos. The Pages project already binds PHOTOS to cheap-rides-photos.
+# [[r2_buckets]]
+# binding = "PHOTOS"
+# bucket_name = "cheap-rides-photos"

@@ -1,6 +1,6 @@
 # 406 Cheap Rides ingest contract
 
-The scanner POSTs listings here. This endpoint stores them. A successful `new` or `price_drop` also emails active paid subscribers from `fanOutInstantPaidAlerts` in `public/_worker.js`. That work runs in `ctx.waitUntil` so the ingest response does not wait on mail. Every message goes through `sendEmail`, so the allowlist guard still applies unless `ALLOW_REAL_SENDS` is exactly `true`. One row in `alert_sends` (unique on subscriber, listing, and event) stops a retry from sending the same alert twice. This endpoint does not send SMS.
+The scanner POSTs listings here. This endpoint stores them. Instant email runs from `fanOutInstantPaidAlerts` in `public/_worker.js` inside `ctx.waitUntil`, so the ingest response does not wait on mail. A `new` event emails only when that `listing_id` was not already in the table. A re-post of an existing id with event `new` does not email. A `price_drop` emails only when the new price is lower than the price already stored. Recipients are active paid subscribers, plus admin addresses in `ADMIN_EMAILS` who have not opted out. Every message goes through `sendEmail`, so the allowlist guard still applies unless `ALLOW_REAL_SENDS` is exactly `true`. One row in `alert_sends` (unique on subscriber, listing, and event) stops a retry from sending the same alert twice. This endpoint does not send SMS.
 
 ## Request
 
@@ -65,7 +65,7 @@ Invalid JSON is HTTP 400 `{ "error": "invalid JSON" }`. A JSON array or any non-
 | `city` | string | 1 to 80 chars |
 | `state` | string | Two letters. Stored uppercase. |
 | `mileage` | integer or null | 0 through 2000000, or null |
-| `hero_photo_url` | string or null | `http` or `https` URL, or null |
+| `hero_photo_url` | string or null | `http` or `https` URL, or null. On update, null keeps the photo already stored (including an uploaded `/photos/<id>.jpg`). A non-null URL replaces it. |
 | `seen_at` | string | ISO 8601 UTC ending in `Z`, such as `2026-09-26T18:04:00Z` or `2026-09-26T18:04:00.123Z`. Offsets like `+00:00` are rejected. |
 
 Upserts are idempotent on `listing_id`. A later `new` or `price_drop` updates the same row and marks it active again.
@@ -196,4 +196,6 @@ The `new` object in that snippet is incomplete on purpose: the whole batch would
 
 ## Public read model
 
-Ingest does not return the feed. Readers use `GET /api/listings`. Anonymous and free accounts only see rows with `seen_at` at least 24 hours old. Paid subscribers with `paid_until` in the future, a confirmed email, and alerts still on get the instant email from `fanOutInstantPaidAlerts` instead of waiting on that delay. An empty category list means every deal. Any other list only matches listings in those categories.
+Ingest does not return the feed. Readers use `GET /api/listings`. Anonymous and free accounts only see rows with `seen_at` at least 24 hours old. Paid subscribers with `paid_until` in the future see new rows immediately. Admin addresses do too, with or without a paid plan. Paid subscribers, and admins who have not opted out, get the instant email from `fanOutInstantPaidAlerts` when a listing is actually inserted or the stored price falls. An empty category list means every deal. Any other list only matches listings in those categories.
+
+Uploaded photos are a separate call, `POST /api/photo?listing_id=<id>` with `Authorization: Bearer <INGEST_TOKEN>` and `Content-Type: image/jpeg` (parameters allowed). The body must be 5 MB or smaller. The listing must already exist. The JPEG is stored as `<listing_id>.jpg` and `hero_photo_url` becomes `/photos/<listing_id>.jpg`. `GET /photos/<listing_id>.jpg` is public. The id cannot contain a slash or a dot.

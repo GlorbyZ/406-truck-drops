@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fanOutInstantPaidAlerts } from '../public/_worker.js';
 import { countRows, createTestDb, getSubscriber, jsonResponse, makeEnv, seedSubscriber, stubFetch, worker } from './helpers.js';
 
 function listing(overrides = {}) {
@@ -143,7 +144,7 @@ test('instant alerts email one allowlisted paid subscriber per listing event', a
     const again = recordingCtx();
     const replay = await ingest(env, listing(), again);
     assert.equal(replay.status, 200);
-    assert.ok(again.tasks.length >= 1);
+    assert.equal(again.tasks.length, 0);
     await again.drain();
     assert.equal(stub.calls.filter((call) => String(call.url).includes('api.resend.com')).length, 1);
     assert.equal(countRows(sqlite, 'alert_sends'), 1);
@@ -200,14 +201,131 @@ test('a failed alert send drops the claim so a retry can mail once', async () =>
   } finally {
     failing.restore();
   }
-  const okCtx = recordingCtx();
+  const replayCtx = recordingCtx();
+  const replayStub = stubFetch(async () => jsonResponse({ id: 'email_should_not_send' }));
+  try {
+    const replay = await ingest(env, listing({ listing_id: 'fb-retry' }), replayCtx);
+    assert.equal(replay.status, 200);
+    assert.equal(replayCtx.tasks.length, 0);
+    await replayCtx.drain();
+    assert.equal(replayStub.calls.filter((call) => String(call.url).includes('api.resend.com')).length, 0);
+    assert.equal(countRows(sqlite, 'alert_sends'), 0);
+  } finally {
+    replayStub.restore();
+  }
   const stub = stubFetch(async () => jsonResponse({ id: 'email_retry' }));
   try {
-    const res = await ingest(env, listing({ listing_id: 'fb-retry' }), okCtx);
-    assert.equal(res.status, 200);
-    await okCtx.drain();
+    const result = await fanOutInstantPaidAlerts(env, listing({ listing_id: 'fb-retry' }), 'new');
+    assert.equal(result.sent, 1);
     assert.equal(stub.calls.filter((call) => String(call.url).includes('api.resend.com')).length, 1);
     assert.equal(countRows(sqlite, 'alert_sends'), 1);
+    const second = await fanOutInstantPaidAlerts(env, listing({ listing_id: 'fb-retry' }), 'new');
+    assert.equal(second.sent, 0);
+    assert.equal(stub.calls.filter((call) => String(call.url).includes('api.resend.com')).length, 1);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('new alerts fire only for a first insert and price drops only when the price falls', async () => {
+  const { db, sqlite } = createTestDb();
+  const env = makeEnv(db, { EMAIL_ALLOWLIST: 'allowed@example.com' });
+  await seedSubscriber(db, {
+    email: 'allowed@example.com',
+    paid_until: new Date(Date.now() + 86400000).toISOString(),
+    stripe_customer_id: 'cus_burst',
+    stripe_subscription_id: 'sub_burst',
+  });
+  const stub = stubFetch(async () => jsonResponse({ id: 'email_burst' }));
+  const sends = () => stub.calls.filter((call) => String(call.url).includes('api.resend.com'));
+  try {
+    const created = recordingCtx();
+    const first = await ingest(env, listing({ listing_id: 'fb-burst', price: 2800 }), created);
+    assert.equal(first.status, 200);
+    await created.drain();
+    assert.equal(sends().length, 1);
+    assert.equal(countRows(sqlite, 'alert_sends'), 1);
+
+    const repost = recordingCtx();
+    const again = await ingest(env, listing({ listing_id: 'fb-burst', price: 2800, event: 'new' }), repost);
+    assert.equal(again.status, 200);
+    assert.equal((await again.json()).results[0].action, 'updated');
+    assert.equal(repost.tasks.length, 0);
+    await repost.drain();
+    assert.equal(sends().length, 1);
+
+    const same = recordingCtx();
+    await ingest(
+      env,
+      listing({
+        listing_id: 'fb-burst',
+        event: 'price_drop',
+        price: 2800,
+        previous_price: 2800,
+        drop_flag: true,
+        seen_at: '2026-08-02T00:00:00Z',
+      }),
+      same
+    );
+    assert.equal(same.tasks.length, 0);
+    await same.drain();
+    assert.equal(sends().length, 1);
+
+    const higher = recordingCtx();
+    await ingest(
+      env,
+      listing({
+        listing_id: 'fb-burst',
+        event: 'price_drop',
+        price: 3000,
+        previous_price: 2800,
+        drop_flag: true,
+        seen_at: '2026-08-03T00:00:00Z',
+      }),
+      higher
+    );
+    assert.equal(higher.tasks.length, 0);
+    await higher.drain();
+    assert.equal(sends().length, 1);
+    assert.equal(sqlite.prepare('SELECT price FROM listings WHERE listing_id = ?').get('fb-burst').price, 3000);
+
+    const lower = recordingCtx();
+    const dropped = await ingest(
+      env,
+      listing({
+        listing_id: 'fb-burst',
+        event: 'price_drop',
+        price: 2500,
+        previous_price: 3000,
+        drop_flag: true,
+        deal_score_text: '2012 Civic, $2,500, about $1,200 under market.',
+        seen_at: '2026-08-04T00:00:00Z',
+      }),
+      lower
+    );
+    assert.equal(dropped.status, 200);
+    assert.equal(lower.tasks.length, 1);
+    await lower.drain();
+    assert.equal(sends().length, 2);
+    assert.equal(JSON.parse(sends()[1].opts.body).subject, '2012 Civic, $2,500, about $1,200 under market.');
+
+    const freshDrop = recordingCtx();
+    await ingest(
+      env,
+      listing({
+        listing_id: 'fb-never-seen',
+        event: 'price_drop',
+        price: 1000,
+        previous_price: 2000,
+        drop_flag: true,
+        seen_at: '2026-08-05T00:00:00Z',
+      }),
+      freshDrop
+    );
+    assert.equal(freshDrop.tasks.length, 0);
+    await freshDrop.drain();
+    assert.equal(sends().length, 2);
+    assert.equal(countRows(sqlite, 'listings'), 2);
   } finally {
     stub.restore();
   }

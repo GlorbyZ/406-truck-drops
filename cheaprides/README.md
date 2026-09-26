@@ -11,7 +11,7 @@ Static files plus `public/_worker.js`. No build step and no runtime npm packages
 | `public/` | Pages output. Upload this directory. |
 | `public/_worker.js` | API routes and email/Stripe helpers |
 | `schema.sql` | D1 schema |
-| `wrangler.toml` | Pages config and the `DB` binding |
+| `wrangler.toml` | Pages config, the `DB` binding, and a commented `PHOTOS` R2 binding |
 | `INGEST.md` | Contract for the listing scanner |
 | `test/` | `node --test` suite (dev only) |
 
@@ -56,6 +56,7 @@ Plain vars live in `wrangler.toml` and can be overridden in the Pages dashboard:
 | `EMAIL_FROM` | `406CheapRides <alerts@406truckdrops.com>` | Resend from address. |
 | `EMAIL_ALLOWLIST` | `you@example.com,partner@example.com` | Comma-separated. Used whenever real sends are off. |
 | `ALLOW_REAL_SENDS` | `false` | Must be the exact string `true` to email people outside the allowlist. Leave it `false`. |
+| `ADMIN_EMAILS` | `zaylynbyoung@gmail.com` | Comma-separated exact addresses. Admins get the instant feed and alerts without a paid plan, and checkout refuses them. Plus-aliases are not included. |
 | `SMS_ENABLED` | `false` | Must be the exact string `true` to show the SMS price and accept `plan=sms` at checkout. Off by default. |
 
 Secrets (never commit these):
@@ -130,18 +131,20 @@ Every outbound message goes through `sendEmail` in `public/_worker.js` (login li
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/api/config` | Public | `{sms_enabled}`. True only when `SMS_ENABLED` is exactly `true`. |
-| `POST` | `/api/checkout` | Public | `{email, plan}` with `plan` of `monthly`, `yearly`, or `sms`. `sms` is HTTP 400 unless `SMS_ENABLED` is exactly `true`. Creates a Stripe Checkout Session (`mode=subscription`, 7-day trial, `payment_method_collection=always`). Reuses the Stripe customer when we already have one. Returns `{url}`. Stripe failures log `type` and `code` (no secrets) and return the Stripe message, or a generic line if that message contains a key. |
+| `POST` | `/api/checkout` | Public | `{email, plan}` with `plan` of `monthly`, `yearly`, or `sms`. `sms` is HTTP 400 unless `SMS_ENABLED` is exactly `true`. An admin email is HTTP 400 `admin accounts do not need a subscription`. Creates a Stripe Checkout Session (`mode=subscription`, 7-day trial, `payment_method_collection=always`). Reuses the Stripe customer when we already have one. Returns `{url}`. Stripe failures log `type` and `code` (no secrets) and return the Stripe message, or a generic line if that message contains a key. |
 | `POST` | `/api/stripe-webhook` | `Stripe-Signature` | Verifies HMAC-SHA256 over `{timestamp}.{raw body}`, 5 minute tolerance, constant-time compare. Idempotent on event id. Updates `paid_until` from the subscription period end, or from `trial_end` while status is `trialing`. A deleted subscription drops the row to the free plan. |
 | `GET` | `/api/portal` | Session cookie | 303 redirect to a Stripe Billing Portal session. |
 | `POST` | `/api/login` | Public | Emails a one-time sign-in link (30 minutes). |
 | `GET` | `/api/auth?token=` | Link | Sets an HttpOnly `cr_session` cookie and redirects to `/account`. |
 | `POST` | `/api/logout` | Session | Clears the session. |
-| `GET` | `/api/me` | Session | Plan, status, trial end, paid until. |
+| `GET` | `/api/me` | Session | Plan, status, trial end, paid until. Admins also get `admin: true` and `instant: true`. |
 | `POST` | `/api/subscribe` | Public | Free double opt-in. Confirm link plus unsubscribe link. |
 | `GET` | `/api/confirm?token=` | Link | Marks the email confirmed. |
 | `GET` | `/api/unsubscribe?token=` | Link | Opts the address out of alert email. Does not cancel Stripe. Alert mail uses `?email=&sig=` (HMAC of the address) instead of a stored token. |
-| `POST` | `/api/ingest` | `Bearer` `INGEST_TOKEN` | Scanner upsert. See `INGEST.md`. A successful `new` or `price_drop` also fans out instant email to active paid subscribers via `ctx.waitUntil`. |
-| `GET` | `/api/listings` | Optional session | Public feed. `feed=latest` (default) or `feed=price_drops`. Anonymous and free sessions are delayed 24 hours. Active paid sessions (`monthly`, `yearly`, `sms` with `paid_until` in the future) are instant. |
+| `POST` | `/api/ingest` | `Bearer` `INGEST_TOKEN` | Scanner upsert. See `INGEST.md`. A `new` event emails only when the listing id was not already stored. A `price_drop` emails only when the price is lower than the stored price. Mail goes out through `ctx.waitUntil`. A null `hero_photo_url` on update keeps the photo already stored. |
+| `POST` | `/api/photo?listing_id=` | `Bearer` `INGEST_TOKEN` | JPEG body, 5 MB max, for a listing that already exists. Writes `PHOTOS` and sets `hero_photo_url` to `/photos/<id>.jpg`. |
+| `GET` | `/photos/<id>.jpg` | Public | The uploaded JPEG. `Cache-Control: public, max-age=86400`. |
+| `GET` | `/api/listings` | Optional session | Public feed. `feed=latest` (default) or `feed=price_drops`. Anonymous and free sessions are delayed 24 hours. Active paid sessions (`monthly`, `yearly`, `sms` with `paid_until` in the future) and admin sessions are instant. |
 
 Pages: `/`, `/pricing`, `/categories`, `/account`, `/checkout/success`, `/checkout/cancel`, `/terms`, `/privacy`. Terms and privacy are plain-English drafts. The note `Draft, pending review` is an HTML comment only. Unknown non-API paths return an HTML 404. The SMS card on `/pricing` stays hidden until `SMS_ENABLED` is `true`. `robots.txt`, `sitemap.xml`, `llms.txt`, and `llms-full.txt` are static files in `public/` and are not API routes. Canonical tags use `https://cheaprides.406truckdrops.com`.
 
@@ -161,6 +164,8 @@ No npm install. The suite stubs `fetch` for Stripe and Resend and uses the built
 - Ingest auth, validation, upsert, and price-drop history
 - 24 hour feed delay versus a paid session
 - Email allowlist guard, including login, subscribe, and instant alert fan-out (dedupe on `alert_sends`)
+- `new` alerts only when the listing is inserted, and `price_drop` alerts only when the price is lower than the stored price
+- Admin accounts (`ADMIN_EMAILS`) and JPEG upload to the `PHOTOS` binding
 - SMS checkout gate and checkout error logging
 - HTML 404 for unknown pages
 
@@ -177,7 +182,7 @@ No npm install. The suite stubs `fetch` for Stripe and Resend and uses the built
 9. Use **Manage billing** on `/account`. It should open the Stripe customer portal.
 10. Cancel the subscription in the portal or with a `customer.subscription.deleted` event. The row should fall back to plan `free` and lose instant feed access.
 11. POST a listing to `/api/ingest` using `INGEST.md`. Anonymous `GET /api/listings` hides it until `seen_at` is 24 hours old. A paid session sees it immediately.
-12. With that same address on `EMAIL_ALLOWLIST` and an active paid row, the `new` ingest should send one email. The subject is the deal score line. Posting the same event again should not send a second copy.
+12. With that same address on `EMAIL_ALLOWLIST` and an active paid row, the `new` ingest should send one email. The subject is the deal score line. Posting that same listing id again with event `new` does not send another email. A `price_drop` email goes out only when the price is lower than the stored price.
 13. Failure card `4000 0000 0000 0341` can be used later to exercise `invoice.payment_failed` (status becomes `past_due`).
 
 ## Left for a later step

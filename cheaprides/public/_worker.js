@@ -31,6 +31,7 @@ const CONFIRM_DAYS = 7;
 const SIGNATURE_TOLERANCE_SEC = 300;
 const INGEST_BATCH_LIMIT = 50;
 const LISTING_DELAY_MS = 24 * 60 * 60 * 1000;
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 const te = new TextEncoder();
 const str = (s) => te.encode(s);
@@ -205,6 +206,14 @@ export function parseAllowlist(value) {
     if (email) set.add(email);
   }
   return set;
+}
+
+/* Exact address match. Plus-aliases are different mailboxes. */
+export function isAdminEmail(env, email) {
+  if (typeof email !== 'string') return false;
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return false;
+  return parseAllowlist(env && env.ADMIN_EMAILS).has(normalized);
 }
 
 /* The only outbound email path. Allowlist-only unless ALLOW_REAL_SENDS === "true". */
@@ -633,6 +642,7 @@ async function checkoutPost({ request, env }) {
   if (!email) return json({ error: 'enter a valid email' }, 400);
   if (!PLANS[plan]) return json({ error: 'plan must be monthly, yearly, or sms' }, 400);
   if (plan === 'sms' && !smsEnabled(env)) return json({ error: 'SMS is not available yet' }, 400);
+  if (isAdminEmail(env, email)) return json({ error: 'admin accounts do not need a subscription' }, 400);
   const existing = await env.DB.prepare('SELECT plan, status, paid_until FROM subscribers WHERE email = ?')
     .bind(email)
     .first();
@@ -687,7 +697,8 @@ function blocksDuplicateCheckout(row, nowMs = Date.now()) {
   return false;
 }
 
-function isInstantAccess(row, nowMs = Date.now()) {
+function isInstantAccess(row, env, nowMs = Date.now()) {
+  if (isAdminEmail(env, row && row.email)) return true;
   if (!row) return false;
   if (row.plan !== 'monthly' && row.plan !== 'yearly' && row.plan !== 'sms') return false;
   if (row.status !== 'active') return false;
@@ -696,7 +707,8 @@ function isInstantAccess(row, nowMs = Date.now()) {
   return Number.isFinite(until) && until > nowMs;
 }
 
-function publicSubscriber(row, email) {
+function publicSubscriber(row, email, env) {
+  const admin = isAdminEmail(env, (row && row.email) || email);
   if (!row) {
     return {
       email,
@@ -708,7 +720,8 @@ function publicSubscriber(row, email) {
       sms_phone: null,
       alert_opt_out: false,
       has_billing: false,
-      instant: false,
+      admin,
+      instant: admin,
     };
   }
   return {
@@ -721,7 +734,8 @@ function publicSubscriber(row, email) {
     sms_phone: row.sms_phone || null,
     alert_opt_out: !!row.alert_opt_out,
     has_billing: !!row.stripe_customer_id,
-    instant: isInstantAccess(row),
+    admin,
+    instant: admin || isInstantAccess(row, env),
   };
 }
 
@@ -813,6 +827,14 @@ async function authGet({ request, env }) {
   await env.DB.prepare('INSERT INTO sessions (id, email, expires_at) VALUES (?, ?, ?)')
     .bind(sessionId, row.email, expires)
     .run();
+  if (isAdminEmail(env, row.email)) {
+    await env.DB.prepare(
+      'INSERT INTO subscribers (email, email_confirmed) VALUES (?, 1) ' +
+        'ON CONFLICT(email) DO UPDATE SET email_confirmed = 1'
+    )
+      .bind(row.email)
+      .run();
+  }
   const cookie = await sessionCookie(request, env, sessionId);
   return new Response(null, {
     status: 302,
@@ -836,7 +858,7 @@ async function meGet({ request, env }) {
   const session = await readSession(request, env);
   if (!session) return json({ error: 'sign in required' }, 401);
   const row = await env.DB.prepare('SELECT * FROM subscribers WHERE email = ?').bind(session.email).first();
-  return json(publicSubscriber(row, session.email));
+  return json(publicSubscriber(row, session.email, env));
 }
 
 async function portalGet({ request, env }) {
@@ -1163,16 +1185,29 @@ function subscriberWantsListing(categoriesRaw, listingCategories) {
   return prefs.some((cat) => have.has(cat));
 }
 
-function alertText(listing, unsubUrl) {
+function absolutePhotoUrl(env, raw) {
+  if (typeof raw !== 'string' || !raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('/photos/')) {
+    try {
+      const url = new URL(raw, appUrl(env) + '/');
+      if (url.protocol === 'https:' || url.protocol === 'http:') return url.href;
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+function alertText(env, listing, unsubUrl) {
   const score = listing.deal_score_text || listing.title || 'New cheap ride';
   const lines = [score];
   if (listing.title && listing.title !== score) lines.push(listing.title);
   if (Number.isInteger(listing.price)) lines.push('Price: $' + listing.price.toLocaleString('en-US'));
   const place = [listing.city, listing.state].filter(Boolean).join(', ');
   if (place) lines.push(place);
-  if (typeof listing.hero_photo_url === 'string' && /^https?:\/\//i.test(listing.hero_photo_url)) {
-    lines.push('Photo: ' + listing.hero_photo_url);
-  }
+  const photo = absolutePhotoUrl(env, listing.hero_photo_url);
+  if (photo) lines.push('Photo: ' + photo);
   if (listing.url) lines.push(listing.url);
   lines.push('');
   lines.push('Unsubscribe:');
@@ -1180,14 +1215,11 @@ function alertText(listing, unsubUrl) {
   return lines.join('\n');
 }
 
-function alertHtml(listing, unsubUrl) {
+function alertHtml(env, listing, unsubUrl) {
   const score = escapeHtml(listing.deal_score_text || listing.title || 'New cheap ride');
   const title = escapeHtml(listing.title || '');
   const url = typeof listing.url === 'string' && /^https?:\/\//i.test(listing.url) ? listing.url : '';
-  const photo =
-    typeof listing.hero_photo_url === 'string' && /^https?:\/\//i.test(listing.hero_photo_url)
-      ? listing.hero_photo_url
-      : '';
+  const photo = absolutePhotoUrl(env, listing.hero_photo_url);
   const place = [listing.city, listing.state].filter(Boolean).join(', ');
   const price = Number.isInteger(listing.price) ? '$' + listing.price.toLocaleString('en-US') : '';
   const facts = [price, place].filter(Boolean).join(', ');
@@ -1209,16 +1241,8 @@ async function releaseAlertClaim(db, subscriberId, listingId, eventName) {
     .run();
 }
 
-/* Emails active paid subscribers when a listing is new or the price drops.
-   One row in alert_sends per subscriber, listing, and event. A successful
-   send keeps the row so a retry does not mail twice. A skip or failure
-   deletes the row so a later ingest can try again. Mail goes through sendEmail. */
-export async function fanOutInstantPaidAlerts(env, listing, eventName) {
-  if (!env || !env.DB) return { sent: 0, skipped: 0 };
-  if (eventName !== 'new' && eventName !== 'price_drop') return { sent: 0, skipped: 0 };
-  if (!listing || !listing.listing_id) return { sent: 0, skipped: 0 };
-  const now = isoNow();
-  const { results } = await env.DB.prepare(
+async function loadAlertRecipients(env, now) {
+  const paid = await env.DB.prepare(
     'SELECT id, email, categories FROM subscribers ' +
       'WHERE email_confirmed = 1 AND alert_opt_out = 0 AND status = ? ' +
       "AND plan IN ('monthly', 'yearly', 'sms') " +
@@ -1226,6 +1250,34 @@ export async function fanOutInstantPaidAlerts(env, listing, eventName) {
   )
     .bind('active', now)
     .all();
+  const byId = new Map();
+  for (const row of paid.results || []) byId.set(row.id, row);
+  const admins = [...parseAllowlist(env.ADMIN_EMAILS)];
+  if (admins.length) {
+    const marks = admins.map(() => '?').join(', ');
+    const extra = await env.DB.prepare(
+      'SELECT id, email, categories FROM subscribers WHERE alert_opt_out = 0 AND lower(email) IN (' + marks + ')'
+    )
+      .bind(...admins)
+      .all();
+    for (const row of extra.results || []) {
+      if (!byId.has(row.id)) byId.set(row.id, row);
+    }
+  }
+  return [...byId.values()];
+}
+
+/* Emails active paid subscribers, and admins who have not opted out, when a
+   listing is new or the price drops. Admins do not need paid_until or a
+   confirmed flag. One row in alert_sends per subscriber, listing, and event.
+   A successful send keeps the row so a retry does not mail twice. A skip or
+   failure deletes the row so a later ingest can try again. Mail goes through sendEmail. */
+export async function fanOutInstantPaidAlerts(env, listing, eventName) {
+  if (!env || !env.DB) return { sent: 0, skipped: 0 };
+  if (eventName !== 'new' && eventName !== 'price_drop') return { sent: 0, skipped: 0 };
+  if (!listing || !listing.listing_id) return { sent: 0, skipped: 0 };
+  const now = isoNow();
+  const results = await loadAlertRecipients(env, now);
   let sent = 0;
   let skipped = 0;
   for (const row of results || []) {
@@ -1249,8 +1301,8 @@ export async function fanOutInstantPaidAlerts(env, listing, eventName) {
       const result = await sendEmail(env, {
         to: row.email,
         subject: listing.deal_score_text,
-        text: alertText(listing, unsubUrl),
-        html: alertHtml(listing, unsubUrl),
+        text: alertText(env, listing, unsubUrl),
+        html: alertHtml(env, listing, unsubUrl),
       });
       if (!result.ok) {
         await releaseAlertClaim(env.DB, row.id, listing.listing_id, eventName);
@@ -1299,7 +1351,8 @@ async function recordPriceHistory(db, item) {
 
 async function upsertListing(db, item) {
   const now = isoNow();
-  const existing = await db.prepare('SELECT listing_id, drop_flag FROM listings WHERE listing_id = ?')
+  const existing = await db
+    .prepare('SELECT listing_id, drop_flag, price, hero_photo_url FROM listings WHERE listing_id = ?')
     .bind(item.listing_id)
     .first();
   const keepDrop = Boolean(item.drop_flag || (existing && existing.drop_flag));
@@ -1336,13 +1389,13 @@ async function upsertListing(db, item) {
         now
       )
       .run();
-    return 'created';
+    return { action: 'created', storedPrice: null, hero_photo_url: item.hero_photo_url };
   }
   await db
     .prepare(
       'UPDATE listings SET url = ?, title = ?, year = ?, make = ?, model = ?, price = ?, ' +
         'previous_price = ?, drop_flag = ?, categories = ?, deal_score_text = ?, deal_delta_usd = ?, ' +
-        'city = ?, state = ?, mileage = ?, hero_photo_url = ?, active = 1, seen_at = ?, updated_at = ? ' +
+        'city = ?, state = ?, mileage = ?, hero_photo_url = COALESCE(?, hero_photo_url), active = 1, seen_at = ?, updated_at = ? ' +
         'WHERE listing_id = ?'
     )
     .bind(
@@ -1366,7 +1419,24 @@ async function upsertListing(db, item) {
       item.listing_id
     )
     .run();
-  return 'updated';
+  return {
+    action: 'updated',
+    storedPrice: existing.price,
+    hero_photo_url: item.hero_photo_url || existing.hero_photo_url || null,
+  };
+}
+
+function shouldAlertOnIngest(eventName, saved, nextPrice) {
+  if (!saved) return false;
+  if (eventName === 'new') return saved.action === 'created';
+  if (eventName !== 'price_drop') return false;
+  const previous = saved.storedPrice;
+  return (
+    saved.action === 'updated' &&
+    Number.isInteger(previous) &&
+    Number.isInteger(nextPrice) &&
+    nextPrice < previous
+  );
 }
 
 async function applyIngestItem(env, item, ctx) {
@@ -1382,7 +1452,7 @@ async function applyIngestItem(env, item, ctx) {
       price_history: false,
     };
   }
-  const action = await upsertListing(env.DB, item);
+  const saved = await upsertListing(env.DB, item);
   let priceHistory = false;
   if (item.event === 'price_drop') priceHistory = await recordPriceHistory(env.DB, item);
   const stored = {
@@ -1395,14 +1465,17 @@ async function applyIngestItem(env, item, ctx) {
     title: item.title,
     city: item.city,
     state: item.state,
-    hero_photo_url: item.hero_photo_url,
+    hero_photo_url: saved.hero_photo_url,
   };
-  const pending = scheduleAlertFanOut(ctx, env, stored, item.event);
+  let pending = null;
+  if (shouldAlertOnIngest(item.event, saved, item.price)) {
+    pending = scheduleAlertFanOut(ctx, env, stored, item.event);
+  }
   if (pending) await pending;
   return {
     ok: true,
     listing_id: item.listing_id,
-    action,
+    action: saved.action,
     price_history: priceHistory,
   };
 }
@@ -1504,7 +1577,7 @@ async function listingsGet({ request, env }) {
   if (session) {
     subscriber = await env.DB.prepare('SELECT * FROM subscribers WHERE email = ?').bind(session.email).first();
   }
-  const instant = isInstantAccess(subscriber);
+  const instant = isAdminEmail(env, session && session.email) || isInstantAccess(subscriber, env);
   const cutoff = new Date(Date.now() - LISTING_DELAY_MS).toISOString();
   const priceDrops = feedParam === 'price_drops' ? 1 : 0;
   const { results } = await env.DB.prepare(
@@ -1579,6 +1652,70 @@ function typedAsset(response, path) {
   return new Response(response.body, { status: response.status, headers });
 }
 
+function isJpegContentType(header) {
+  if (!header || typeof header !== 'string') return false;
+  const media = header.split(';')[0].trim().toLowerCase();
+  return media === 'image/jpeg';
+}
+
+/* Ingest listing ids, plus a ban on slashes and dots so the photo key cannot escape the bucket prefix. */
+function listingIdForPhoto(raw) {
+  if (typeof raw !== 'string') return '';
+  const id = raw.trim();
+  if (!id || id.length > 200) return '';
+  if (id.includes('/') || id.includes('\\') || id.includes('.')) return '';
+  return id;
+}
+
+function photoNotFound() {
+  return new Response('not found', {
+    status: 404,
+    headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+  });
+}
+
+async function photoPost({ request, env }) {
+  if (!ingestAuthorized(request, env)) return json({ error: 'unauthorized' }, 401);
+  const listingId = listingIdForPhoto(new URL(request.url).searchParams.get('listing_id') || '');
+  if (!listingId) return json({ error: 'listing not found' }, 404);
+  const row = await env.DB.prepare('SELECT listing_id FROM listings WHERE listing_id = ?').bind(listingId).first();
+  if (!row) return json({ error: 'listing not found' }, 404);
+  if (!isJpegContentType(request.headers.get('content-type'))) {
+    return json({ error: 'content-type must be image/jpeg' }, 400);
+  }
+  const declared = request.headers.get('content-length');
+  if (declared !== null && declared !== '' && Number(declared) > PHOTO_MAX_BYTES) {
+    return json({ error: 'payload too large' }, 413);
+  }
+  const bytes = await request.arrayBuffer();
+  if (bytes.byteLength > PHOTO_MAX_BYTES) return json({ error: 'payload too large' }, 413);
+  if (!env.PHOTOS || typeof env.PHOTOS.put !== 'function') {
+    return json({ error: 'photo storage is not configured' }, 500);
+  }
+  await env.PHOTOS.put(listingId + '.jpg', bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+  await env.DB.prepare('UPDATE listings SET hero_photo_url = ?, updated_at = ? WHERE listing_id = ?')
+    .bind('/photos/' + encodeURIComponent(listingId) + '.jpg', isoNow(), listingId)
+    .run();
+  return json({ ok: true });
+}
+
+async function photoGet(path, env) {
+  const match = path.match(/^\/photos\/(.+)\.jpg$/);
+  if (!match) return photoNotFound();
+  const listingId = listingIdForPhoto(match[1]);
+  if (!listingId) return photoNotFound();
+  if (!env.PHOTOS || typeof env.PHOTOS.get !== 'function') return photoNotFound();
+  const object = await env.PHOTOS.get(listingId + '.jpg');
+  if (!object || object.body == null) return photoNotFound();
+  return new Response(object.body, {
+    status: 200,
+    headers: {
+      'content-type': 'image/jpeg',
+      'cache-control': 'public, max-age=86400',
+    },
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -1597,8 +1734,10 @@ export default {
       if (path === '/api/confirm' && request.method === 'GET') return await confirmGet({ request, env });
       if (path === '/api/unsubscribe' && request.method === 'GET') return await unsubscribeGet({ request, env });
       if (path === '/api/ingest' && request.method === 'POST') return await ingestPost({ request, env, ctx });
+      if (path === '/api/photo' && request.method === 'POST') return await photoPost({ request, env });
       if (path === '/api/listings' && request.method === 'GET') return await listingsGet({ request, env });
       if (path.startsWith('/api/')) return notFound();
+      if (path.startsWith('/photos/') && request.method === 'GET') return await photoGet(path, env);
       if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
         const asset = await env.ASSETS.fetch(request);
         if (asset && asset.status !== 404) return typedAsset(asset, path);
